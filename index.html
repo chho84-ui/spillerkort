@@ -239,7 +239,9 @@ function parseKlasse(html) {
     var disiplin = sec.substring(0, titleEnd).trim();
     var content = sec.substring(titleEnd);
     if (content.indexOf(SI) === -1 && content.indexOf(SN) === -1) continue;
+    var reLink = /VisSpiller\/#\d+['"?][^>]*>([^<]+)<\/a>/g;
     var makkere = [];
+    var foundRowStart = -1;
     var trIdx = 0;
     while (true) {
       var trStart = content.indexOf('<tr', trIdx);
@@ -247,15 +249,29 @@ function parseKlasse(html) {
       var trEnd = content.indexOf('</tr>', trStart);
       var row = content.substring(trStart, trEnd > 0 ? trEnd + 5 : trStart + 800);
       if (row.indexOf(SI) !== -1 || row.indexOf(SN) !== -1) {
-        var re = /VisSpiller\/#\d+['"'][^>]*>([^<]+)<\/a>/g;
+        foundRowStart = trStart;
+        reLink.lastIndex = 0;
         var m;
-        while ((m = re.exec(row)) !== null) {
+        while ((m = reLink.exec(row)) !== null) {
           var name = m[1].trim();
           if (name && name.indexOf(SN) === -1) makkere.push(name);
         }
         break;
       }
       trIdx = trStart + 1;
+    }
+    if (!makkere.length && foundRowStart !== -1 && disiplin.toLowerCase().indexOf('single') === -1) {
+      var nextTrStart = content.indexOf('<tr', foundRowStart + 1);
+      if (nextTrStart !== -1) {
+        var nextTrEnd = content.indexOf('</tr>', nextTrStart);
+        var nextRow = content.substring(nextTrStart, nextTrEnd > 0 ? nextTrEnd + 5 : nextTrStart + 800);
+        reLink.lastIndex = 0;
+        var m2;
+        while ((m2 = reLink.exec(nextRow)) !== null) {
+          var name2 = m2[1].trim();
+          if (name2 && name2.indexOf(SN) === -1) makkere.push(name2);
+        }
+      }
     }
     results.push({ disiplin: disiplin, makkere: makkere, bekreftet: content.indexOf('checkmark.gif') !== -1 });
   }
