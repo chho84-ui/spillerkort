@@ -329,6 +329,16 @@ function visRanking(rows) {
   }
 }
 
+function discTilKode(disc) {
+  var d = (disc || '').toLowerCase();
+  if (d.indexOf('mixed') !== -1) return 'MD';
+  if (d.indexOf('herredouble') !== -1 || d.indexOf('herre double') !== -1) return 'HD';
+  if (d.indexOf('damedouble') !== -1 || d.indexOf('dame double') !== -1) return 'DD';
+  if (d.indexOf('herresingle') !== -1) return 'HS';
+  if (d.indexOf('damesingle') !== -1) return 'DS';
+  return disc ? disc.substring(0, 2).toUpperCase() : '';
+}
+
 function visTurnering(t) {
   var res = document.getElementById('resultat');
   var sec = document.createElement('div');
@@ -340,10 +350,19 @@ function visTurnering(t) {
   var rh = '';
   for (var i = 0; i < t.registreringer.length; i++) {
     var r = t.registreringer[i];
+    var makkerHtml = '';
+    if (r.makkere.length) {
+      if (r.makkere[0] === 'X-makker') {
+        makkerHtml = '<span class="sk-makker">(uten makker)</span>';
+      } else {
+        makkerHtml = '<span class="sk-makker">m/ ' + r.makkere.join(', ')
+          + ' <span class="sk-rank-mini" id="sk-mkr-' + t.tournamentId + '-' + i + '"></span></span>';
+      }
+    }
     rh += '<div class="sk-row">'
       + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
       + '<span class="sk-disc">' + r.disiplin + '</span>'
-      + (r.makkere.length ? '<span class="sk-makker">' + (r.makkere[0] === 'X-makker' ? '(uten makker)' : 'm/ ' + r.makkere.join(', ')) + '</span>' : '')
+      + makkerHtml
       + '</div>';
   }
   var kampDiv = '<div id="sk-kl-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center">Laster kampprogram...</div></div>';
@@ -354,6 +373,19 @@ function visTurnering(t) {
     div.innerHTML = rh + '<div style="font-size:11px;color:#555;text-align:center;margin-top:8px">Program ikke publisert ennå</div>';
   }
   res.appendChild(div);
+
+  // Hent ranking for makkere asynkront
+  for (var mi = 0; mi < t.registreringer.length; mi++) {
+    (function(reg, idx) {
+      if (!reg.makkere.length || reg.makkere[0] === 'X-makker') return;
+      var kode = discTilKode(reg.disiplin);
+      hentMotstanderRanking(reg.makkere[0], kode).then(function(ranking) {
+        if (!ranking) return;
+        var el = document.getElementById('sk-mkr-' + t.tournamentId + '-' + idx);
+        if (el) el.textContent = '#' + ranking.plass;
+      });
+    })(t.registreringer[mi], mi);
+  }
 
   if (t.cup2000Url) {
     var tidM = t.cup2000Url.match(/tournamentid=(\d+)/i);
