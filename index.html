@@ -1,537 +1,361 @@
 <!DOCTYPE html>
-<html lang="nb">
+<html lang="no">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#1a1a2e">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>🏸 Spillerkort – Installasjon</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏸 Spillerkort</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, Roboto, 'Segoe UI', sans-serif;
-    background: #1a1a2e; color: #e0e0e0; min-height: 100vh;
-    display: flex; flex-direction: column; align-items: center;
-    padding: 24px 16px;
-  }
-  h1 { color: #e94560; font-size: 28px; margin-bottom: 6px; }
-  .subtitle { color: #888; margin-bottom: 32px; font-size: 14px; }
-  .card {
-    background: #16213e; border: 1px solid #0f3460; border-radius: 12px;
-    padding: 20px; width: 100%; max-width: 600px; margin-bottom: 20px;
-  }
-  .card h2 { font-size: 16px; color: #53d8fb; margin-bottom: 12px; }
-  .step {
-    display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px;
-  }
-  .step-num {
-    background: #e94560; color: #fff; border-radius: 50%;
-    width: 28px; height: 28px; min-width: 28px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: bold; font-size: 13px;
-  }
-  .step p { font-size: 14px; line-height: 1.6; color: #ccc; }
-  .step p code {
-    background: #0f3460; padding: 1px 5px; border-radius: 3px;
-    font-family: monospace; color: #53d8fb; font-size: 13px;
-  }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, Roboto, sans-serif; font-size: 15px; min-height: 100vh; }
 
-  /* Bookmarklet-knapp */
-  #bookmarklet-link {
-    display: block; background: #e94560; color: #fff; text-align: center;
-    padding: 14px; border-radius: 10px; font-size: 16px; font-weight: bold;
-    text-decoration: none; margin: 16px 0; cursor: grab;
-    border: 3px dashed rgba(255,255,255,0.3);
-    transition: background 0.2s;
-  }
-  #bookmarklet-link:hover { background: #c73652; }
+  #topbar { background: #16213e; padding: 12px 16px; border-bottom: 2px solid #0f3460; display: flex; align-items: center; gap: 10px; }
+  #topbar h1 { font-size: 18px; color: #e94560; flex: 1; }
 
-  /* Varselboks */
-  .notice {
-    background: rgba(83,216,251,0.08); border-left: 3px solid #53d8fb;
-    padding: 10px 14px; border-radius: 0 8px 8px 0;
-    font-size: 13px; color: #aaa; margin-top: 8px;
-  }
+  #formkort { background: #16213e; padding: 14px 16px; border-bottom: 1px solid #0f3460; display: flex; flex-direction: column; gap: 8px; }
+  #formkort label { font-size: 11px; color: #888; display: flex; flex-direction: column; gap: 4px; }
+  #formkort input { background: #0a0a1e; border: 1px solid #0f3460; border-radius: 6px; color: #e0e0e0; padding: 8px 10px; font-size: 14px; width: 100%; }
+  #formkort input:focus { outline: none; border-color: #e94560; }
+  #formrad { display: flex; gap: 8px; }
+  #formrad label { flex: 1; }
+  #hent-btn { width: 100%; background: #e94560; color: #fff; border: none; border-radius: 8px; padding: 12px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 4px; }
+  #hent-btn:active { background: #c73450; }
+  #hent-btn:disabled { background: #555; cursor: default; }
 
-  /* Konfig */
-  .config-row {
-    display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
-  }
-  .config-row label { font-size: 12px; color: #888; flex: 1; min-width: 140px; }
-  .config-row input {
-    background: #0f3460; border: 1px solid #355; color: #e0e0e0;
-    padding: 6px 10px; border-radius: 6px; font-size: 14px; width: 100%;
-  }
-  button {
-    background: #0f3460; color: #53d8fb; border: 1px solid #355;
-    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;
-    margin-top: 8px;
-  }
-  button:hover { background: #1a4080; }
-  .tag {
-    display: inline-block; font-size: 10px; padding: 2px 6px;
-    border-radius: 10px; background: #0f3460; color: #53d8fb;
-    margin-left: 6px; vertical-align: middle;
-  }
-
-  @media (max-width: 480px) {
-    .config-row { flex-direction: column; }
-  }
+  #resultat { padding: 12px; }
+  .sk-status { color: #aaa; font-style: italic; padding: 8px 0; font-size: 13px; text-align: center; }
+  .sk-sek { margin-bottom: 10px; }
+  .sk-sek h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #fff; background: #0f3460; padding: 5px 10px; border-left: 3px solid #e94560; margin: 0 0 8px; }
+  .sk-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
+  .sk-chip { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 8px; text-align: center; }
+  .sk-chip .r-d { font-size: 9px; color: #888; }
+  .sk-chip .r-k { font-size: 10px; color: #ccc; }
+  .sk-chip .r-p { font-size: 20px; font-weight: bold; color: #e94560; }
+  .sk-t { background: #16213e; border: 1px solid #0f3460; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .sk-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid #0f3460; }
+  .sk-bk { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #0f3460; white-space: nowrap; }
+  .sk-bk.ok { background: #1a7a4e; color: #7fffd4; }
+  .sk-disc { flex: 1; font-size: 13px; }
+  .sk-makker { font-size: 11px; color: #888; }
+  .sk-btn { display: block; text-align: center; background: #e94560; color: #fff; text-decoration: none; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 12px; font-weight: bold; }
+  .sk-kamplist { margin-top: 8px; border-top: 1px solid #0f3460; padding-top: 6px; }
+  .sk-kamp { display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid #0a0a20; font-size: 12px; align-items: center; }
+  .sk-kamp-tid { color: #53d8fb; font-weight: bold; min-width: 48px; }
+  .sk-kamp-bane { color: #888; min-width: 32px; }
+  .sk-kamp-disc { color: #aaa; min-width: 28px; font-size: 10px; }
+  .sk-kamp-mot { flex: 1; color: #e0e0e0; }
+  .sk-kamp-res { color: #7fffd4; min-width: 50px; text-align: right; }
+  .sk-rank-mini { font-size: 9px; background: #0f3460; color: #e94560; padding: 1px 4px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
 </style>
 </head>
 <body>
 
-<h1>🏸 Spillerkort</h1>
-<p class="subtitle">Finn turneringer og kampprogram på badmintonportalen.no</p>
-
-<!-- ─── SPILLER-KONFIG ─── -->
-<div class="card">
-  <h2>⚙️ Spillerinnstillinger</h2>
-  <div class="config-row">
-    <label>
-      Spillernavn (fullt)
-      <input id="cfg-navn" type="text" value="">
-    </label>
-    <label>
-      Player ID (fra URL: /VisSpiller/#<b>50161</b>)
-      <input id="cfg-id" type="text" value="">
-    </label>
-    <label>
-      Klubb
-      <input id="cfg-klubb" type="text" value="">
-    </label>
-  </div>
-  <button onclick="genererBookmarklet()">🔄 Oppdater bookmarklet</button>
+<div id="topbar">
+  <h1>🏸 Spillerkort</h1>
 </div>
 
-<!-- ─── DESKTOP-INSTRUKSER ─── -->
-<div class="card">
-  <h2>💻 Desktop-nettleser (Chrome / Edge)</h2>
-
-  <div class="step">
-    <div class="step-num">1</div>
-    <p>Trykk <code>Ctrl+Shift+B</code> for å vise favorittlinjen. Høyreklikk på den og velg <b>Legg til side…</b></p>
+<div id="formkort">
+  <label>Spillernavn (fullt)
+    <input id="f-navn" type="text" placeholder="Ola Nordmann" autocomplete="off">
+  </label>
+  <div id="formrad">
+    <label>Player ID
+      <input id="f-id" type="text" placeholder="50161" inputmode="numeric">
+    </label>
+    <label>Klubb
+      <input id="f-klubb" type="text" placeholder="Sotra" autocomplete="off">
+    </label>
   </div>
-
-  <div class="step">
-    <div class="step-num">2</div>
-    <p>Gi bokmerket navn <b>🏸 Spillerkort</b>. Slett innholdet i <b>URL</b>-feltet og lim inn koden fra boksen nedenfor (<b>Kopier</b>-knappen).</p>
-  </div>
-
-  <div class="step">
-    <div class="step-num">3</div>
-    <p>Gå til <a href="https://badmintonportalen.no" target="_blank" style="color:#53d8fb">badmintonportalen.no</a> og klikk <b>🏸 Spillerkort</b> i favorittlinjen. Panelet åpnes til høyre.</p>
-  </div>
-
-  <div class="notice" style="margin-top:0">
-    ⚠️ Chrome tillater ikke å dra bookmarklets fra lokale sider. Bruk <b>Kopier</b>-knappen og lim inn i URL-feltet manuelt som beskrevet over.
-  </div>
+  <button id="hent-btn" onclick="hent()">🔍 Hent spillerkort</button>
 </div>
 
-<!-- ─── ANDROID-INSTRUKSER ─── -->
-<div class="card">
-  <h2>📱 Android (Chrome)</h2>
-
-  <div class="step">
-    <div class="step-num">1</div>
-    <p>Åpne <strong>denne siden</strong> i Chrome på mobilen, trykk <code>⋮</code> → <em>Legg til på startskjermen</em>. Da får du en app-ikon.</p>
-  </div>
-
-  <div class="step">
-    <div class="step-num">2</div>
-    <p>Alternativt: kopier bookmarklet-teksten og legg den inn som en ny bokmerke i Chrome (rediger URL-feltet manuelt).</p>
-  </div>
-
-  <div class="step">
-    <div class="step-num">3</div>
-    <p>Gå til <a href="https://badmintonportalen.no" target="_blank" style="color:#53d8fb">badmintonportalen.no</a>, skriv <code>spill</code> i adressefeltet og velg bookmarklet-forslaget.</p>
-  </div>
-
-  <div class="notice">
-    💡 På Android fungerer bookmarklets best når du kaller dem opp via adressefeltet – skriv de første bokstavene av navnet og velg det fra historikk/bokmerker.
-  </div>
+<div id="resultat">
+  <div class="sk-status" id="st">Fyll inn spillerinfo og trykk Hent.</div>
 </div>
 
-<!-- ─── BOOKMARKLET-TEKST (kopier) ─── -->
-<div class="card">
-  <h2>📋 Bookmarklet-kode (kopier til bokmerke)</h2>
-  <p style="font-size:13px;color:#888;margin-bottom:10px">
-    Lag et nytt bokmerke i nettleseren, gi det navnet <b>🏸 Spillerkort</b>, og lim inn teksten nedenfor som URL:
-  </p>
-  <textarea id="bm-text" readonly
-    style="width:100%;height:80px;background:#0a0a1a;color:#53d8fb;border:1px solid #0f3460;
-           border-radius:6px;padding:8px;font-family:monospace;font-size:11px;resize:vertical">
-  </textarea>
-  <button onclick="kopier()">📋 Kopier</button>
-  <span id="kopiert" style="color:#7fffd4;font-size:12px;margin-left:8px;display:none">✓ Kopiert!</span>
-  <div style="margin-top:12px;padding:10px;background:#0a1628;border:1px dashed #0f3460;border-radius:8px;text-align:center">
-    <div style="font-size:12px;color:#888;margin-bottom:6px">📱 <b>Kiwi / Firefox på Android:</b> hold inne på lenken under → "Legg til bokmerke"</div>
-    <a id="bm-link" href="#" style="display:inline-block;background:#e94560;color:#fff;padding:10px 20px;border-radius:8px;font-weight:bold;font-size:14px;text-decoration:none">🏸 Spillerkort — hold inne her</a>
-  </div>
+<script>
+var PROXY = 'https://spillerkort-proxy.chho84.workers.dev';
 
-<!-- ─── SPILLERKORT JS-KILDE (injiseres) ─── -->
-<script id="spillerkort-source">
-var SPILLER_NAVN  = '';
-var SPILLER_ID    = '';
-var SPILLER_KLUBB = '';
+var SN, SI, SK, SS;
 
-(function() {
-  var SN = SPILLER_NAVN, SI = SPILLER_ID, SK = SPILLER_KLUBB;
-  var now0 = new Date();
-  var seasonStart = now0.getMonth() >= 7 ? now0.getFullYear() : now0.getFullYear() - 1;
-  var SS = '200' + seasonStart;
+function lagre() {
+  localStorage.setItem('sk_navn', document.getElementById('f-navn').value);
+  localStorage.setItem('sk_id',   document.getElementById('f-id').value);
+  localStorage.setItem('sk_klubb',document.getElementById('f-klubb').value);
+}
 
-  var existing = document.getElementById('sk-panel');
-  if (existing) { existing.parentNode.removeChild(existing); }
+function laster() {
+  var n = localStorage.getItem('sk_navn');
+  var i = localStorage.getItem('sk_id');
+  var k = localStorage.getItem('sk_klubb');
+  if (n) document.getElementById('f-navn').value = n;
+  if (i) document.getElementById('f-id').value   = i;
+  if (k) document.getElementById('f-klubb').value = k;
+}
 
-  var p = document.createElement('div');
-  p.id = 'sk-panel';
+function api(method, data) {
+  return fetch(PROXY + '/api', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method: method, data: data })
+  }).then(function(r) { return r.json(); });
+}
 
-  var styleEl = document.createElement('style');
-  styleEl.textContent = '#sk-panel{position:fixed;top:0;right:0;width:360px;max-width:100vw;height:100vh;background:#1a1a2e;color:#e0e0e0;font-family:-apple-system,Roboto,sans-serif;font-size:14px;z-index:999999;box-shadow:-4px 0 20px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}'
-    + '#sk-hdr{background:#16213e;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f3460}'
-    + '#sk-tittel{font-size:16px;font-weight:bold;color:#e94560}'
-    + '#sk-sub{font-size:11px;color:#888}'
-    + '#sk-x{cursor:pointer;color:#888;font-size:20px;padding:4px 8px;border-radius:4px}'
-    + '#sk-body{flex:1;overflow-y:auto;padding:12px}'
-    + '.sk-status{color:#aaa;font-style:italic;padding:8px 0;font-size:13px}'
-    + '.sk-sek h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#fff;background:#0f3460;padding:5px 10px;border-left:3px solid #e94560;margin:0 0 8px}'
-    + '.sk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px}'
-    + '.sk-chip{background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:8px;text-align:center}'
-    + '.sk-chip .r-d{font-size:9px;color:#888}.sk-chip .r-k{font-size:10px;color:#ccc}.sk-chip .r-p{font-size:20px;font-weight:bold;color:#e94560}'
-    + '.sk-t{background:#16213e;border:1px solid #0f3460;border-radius:10px;padding:12px;margin-bottom:10px}'
-    + '.sk-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #0f3460}'
-    + '.sk-bk{font-size:10px;padding:2px 6px;border-radius:10px;background:#0f3460;white-space:nowrap}'
-    + '.sk-bk.ok{background:#1a7a4e;color:#7fffd4}'
-    + '.sk-disc{flex:1;font-size:13px}.sk-makker{font-size:11px;color:#888}'
-    + '.sk-btn{display:block;text-align:center;background:#e94560;color:#fff;text-decoration:none;padding:8px;border-radius:6px;margin-top:8px;font-size:12px;font-weight:bold}'
-    + '.sk-kamplist{margin-top:8px;border-top:1px solid #0f3460;padding-top:6px}'
-    + '.sk-kamp{display:flex;gap:6px;padding:4px 0;border-bottom:1px solid #0a0a20;font-size:12px;align-items:center}'
-    + '.sk-kamp-tid{color:#53d8fb;font-weight:bold;min-width:48px}'
-    + '.sk-kamp-bane{color:#888;min-width:32px}'
-    + '.sk-kamp-disc{color:#aaa;min-width:28px;font-size:10px}'
-    + '.sk-kamp-mot{flex:1;color:#e0e0e0}'
-    + '.sk-kamp-res{color:#7fffd4;min-width:50px;text-align:right}'
-    + '.sk-rank-mini{font-size:9px;background:#0f3460;color:#e94560;padding:1px 4px;border-radius:4px;margin-left:4px;vertical-align:middle}';
-  p.appendChild(styleEl);
+function appApi(data) {
+  return fetch(PROXY + '/app', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function(r) { return r.json(); });
+}
 
-  var hdr = document.createElement('div');
-  hdr.id = 'sk-hdr';
-  hdr.innerHTML = '<div><div id="sk-tittel">Spillerkort</div><div id="sk-sub">' + SN + ' - ' + SK + '</div></div><div id="sk-x">X</div>';
-  p.appendChild(hdr);
+function cup2000Api(tournamentid) {
+  return fetch(PROXY + '/cup2000', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tournamentid: tournamentid, navn: SN, klubb: SK })
+  }).then(function(r) { return r.json(); });
+}
 
-  var body = document.createElement('div');
-  body.id = 'sk-body';
-  var st = document.createElement('div');
-  st.id = 'sk-st';
-  st.className = 'sk-status';
-  body.appendChild(st);
-  p.appendChild(body);
-
-  document.body.appendChild(p);
-  document.getElementById('sk-x').onclick = function() { p.parentNode.removeChild(p); };
-
-  var ctx = window.SR_CallbackContext;
-  if (!ctx) { st.textContent = 'Apne en side pa badmintonportalen.no og provigjen.'; return; }
-
-  st.textContent = 'Henter spillerinfo og turneringer...';
-
-  function api(method, data) {
-    return fetch('/SportsResults/Components/WebService1.asmx/' + method, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(data)
-    }).then(function(r) { return r.json(); });
-  }
-
-  function hentRanking() {
-    return api('GetPlayerProfile', {
-      callbackcontextkey: ctx, seasonid: SS, playerid: SI,
-      getplayerdata: false, showUserProfile: true, showheader: false
-    }).then(function(res) {
-      var html = String((res.d && res.d.Html) || res.d || '');
-      var rows = [];
-      var dp = new DOMParser();
-      var doc = dp.parseFromString(html, 'text/html');
-      var trs = doc.querySelectorAll('table tr');
-      for (var i = 0; i < trs.length; i++) {
-        var tds = trs[i].querySelectorAll('td');
-        if (tds.length >= 2) {
-          var cells = [];
-          for (var j = 0; j < tds.length; j++) cells.push(tds[j].textContent.trim());
-          var last = cells[cells.length - 1];
-          if (/^\d+$/.test(last)) rows.push({ disiplin: cells[0], klasse: cells[1] || '', plass: last });
-        }
-      }
-      return rows;
-    });
-  }
-
-  function finnTurneringer() {
-    var now = new Date();
-    var dd = String(now.getDate()).padStart(2, '0');
-    var mm = String(now.getMonth() + 1).padStart(2, '0');
-    var yyyy = now.getFullYear();
-    var fra = dd + '.' + mm + '.' + yyyy;
-
-    return api('GetSeasonPlan', {
-      callbackcontextkey: ctx, seasonid: SS,
-      regionids: null, agegroupids: null, classids: null,
-      strfrom: fra, strto: '31.12.' + yyyy,
-      strweekno: '', strweekno2: '', georegionids: null,
-      clubid: '', disciplines: null, playerid: null,
-      birthdate: null, age: null, points: null, gender: null,
-      publicseasonplan: true, showleague: false,
-      selectclientfunction: 'SeasonPlan.SelectTournament', page: 0
-    }).then(function(res) {
-
-      var html = String((res.d && (res.d.html || res.d.Html)) || res.d || '');
-      var kmap = {};
-      var re = /SeasonPlan\.SelectTournament\((\d+),\s*(\d+)\)/g;
-      var m;
-      while ((m = re.exec(html)) !== null) {
-        var tid = m[1], cid = m[2];
-        if (!kmap[tid]) kmap[tid] = { firstClassId: cid, klasser: [], navn: '', dato: '', cup2000Url: '' };
-        if (kmap[tid].klasser.indexOf(cid) === -1) kmap[tid].klasser.push(cid);
-      }
-      var dp2 = new DOMParser();
-      var doc2 = dp2.parseFromString(html, 'text/html');
-      var trs2 = doc2.querySelectorAll('tr[onclick]');
-      for (var i = 0; i < trs2.length; i++) {
-        var oc = trs2[i].getAttribute('onclick');
-        var idM = oc && oc.match(/SelectTournament\((\d+),/);
-        if (!idM) continue;
-        var tid2 = idM[1];
-        if (!kmap[tid2] || kmap[tid2].navn) continue;
-        var tekst = trs2[i].textContent.replace(/\s+/g, ' ').trim();
-        var dm = tekst.match(/\d{2}\.\d{2}\.\d{4}/);
-        kmap[tid2].dato = dm ? dm[0] : '';
-        kmap[tid2].navn = tekst.substring(0, 80);
-      }
-      var tids = Object.keys(kmap);
-      st.textContent = 'Sjekker ' + tids.length + ' turneringer...';
-
-      return tids.reduce(function(chain, tid) {
-        return chain.then(function(funnet) {
-          var info = kmap[tid];
-          return hentAlleKlasser(tid).then(function(alleKlasser) {
-            info.klasser = alleKlasser;
-            return sjekkTurnering(tid, info).then(function(r) {
-              if (r) funnet.push(r);
-              return funnet;
-            });
-          });
-        });
-      }, Promise.resolve([]));
-    });
-  }
-
-  function hentAlleKlasser(tournamentId) {
-    return fetch('/SportsResults/Services/App.aspx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 18, unionid: 200, tournamentid: parseInt(tournamentId), commandversion: 6 })
-    }).then(function(r) { return r.json(); })
-      .then(function(data) {
-        var results = data.searchresult || [];
-        var ids = [];
-        for (var i = 0; i < results.length; i++) {
-          var classId = results[i][1];
-          if (classId && parseInt(classId) > 0) ids.push(String(classId));
-        }
-        return ids.length > 0 ? ids : [String(tournamentId)];
-      })
-      .catch(function() { return [String(tournamentId)]; });
-  }
-
-  function sjekkTurnering(tid, info) {
-    return info.klasser.reduce(function(chain, cid) {
-      return chain.then(function(regs) {
-        return api('SearchRegistrationsByClass', {
-          callbackcontextkey: ctx,
-          tournamentclassid: parseInt(cid),
-          clientselectfunction: 'SelectTournamentClass1'
-        }).then(function(res) {
-          var html = String((res.d && res.d.Html) || '');
-          if (html.indexOf(SI) !== -1 || html.indexOf(SN) !== -1) {
-            var klasser = parseKlasse(html);
-            for (var ki = 0; ki < klasser.length; ki++) regs.push(klasser[ki]);
-            var cupM = html.match(/cup2000\.dk[^\s"']*/i);
-            if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
-          }
-          return regs;
-        });
-      });
-    }, Promise.resolve([])).then(function(regs) {
-      if (!regs.length) return null;
-      return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, cup2000Url: info.cup2000Url };
-    });
-  }
-
-  function parseKlasse(html) {
-    var results = [];
-    var pos = 0;
-    while (true) {
-      var idx = html.indexOf(SI, pos);
-      if (idx === -1) idx = html.indexOf(SN, pos);
-      if (idx === -1) break;
-      pos = idx + 1;
-
-      var before = html.substring(0, idx);
-      var h3s = before.lastIndexOf('<h3>');
-      var h3e = before.lastIndexOf('</h3>');
-      var disiplin = h3s >= 0 ? html.substring(h3s + 4, h3e).trim() : 'Ukjent';
-
-      var rowEnd = html.indexOf('</tr>', idx);
-      var row = html.substring(idx, rowEnd > 0 ? rowEnd : idx + 600);
-      var mm = row.match(/VisSpiller\/#\d+'[^>]*>([^<]+)<\/a>/g) || [];
-      var makkere = [];
-      for (var i = 0; i < mm.length; i++) {
-        var nm = mm[i].match(/>([^<]+)<\/a>/);
-        if (nm && nm[1].indexOf(SN) === -1) makkere.push(nm[1].trim());
-      }
-
-      var alreadyFound = false;
-      for (var d = 0; d < results.length; d++) {
-        if (results[d].disiplin === disiplin) { alreadyFound = true; break; }
-      }
-      if (!alreadyFound) {
-        results.push({ disiplin: disiplin, makkere: makkere, bekreftet: row.indexOf('checkmark.gif') !== -1 });
-      }
-    }
-    return results;
-  }
-
-  function hentMotstanderRanking(navn, disc) {
-    return api('SearchPlayer', {
-      callbackcontextkey: ctx, selectfunction: 'SP1',
-      name: navn, clubid: '', playernumber: '', gender: '',
-      agegroupid: '', searchteam: false, licenseonly: false,
-      agegroupcontext: 0, tournamentdate: ''
-    }).then(function(res) {
-      var hmHtml = String((res.d && (res.d.Html || res.d.html)) || '');
-      var pidM = hmHtml.match(/VisSpiller\/#(\d+)/);
-      if (!pidM) return null;
-      var pid = pidM[1];
-      return api('GetPlayerProfile', {
-        callbackcontextkey: ctx, seasonid: SS, playerid: pid,
-        getplayerdata: false, showUserProfile: true, showheader: false
-      }).then(function(res2) {
-        var html2 = String((res2.d && res2.d.Html) || '');
-        var dp3 = new DOMParser();
-        var doc3 = dp3.parseFromString(html2, 'text/html');
-        var trs3 = doc3.querySelectorAll('table tr');
-        var discKey = disc ? disc.toUpperCase().substring(0, 2) : '';
-        var discMap = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixeddouble'};
-        var discFull = discMap[discKey] || '';
-        for (var ri = 0; ri < trs3.length; ri++) {
-          var tds3 = trs3[ri].querySelectorAll('td');
-          if (tds3.length >= 2) {
-            var cells3 = [];
-            for (var rj = 0; rj < tds3.length; rj++) cells3.push(tds3[rj].textContent.trim());
-            var last3 = cells3[cells3.length - 1];
-            if (/^\d+$/.test(last3) && discFull && cells3[0].indexOf(discFull.substring(0, 4)) !== -1) {
-              return {plass: last3, klasse: cells3[1] || ''};
-            }
-          }
-        }
-        return null;
-      });
-    }).catch(function() { return null; });
-  }
-
-  function visRanking(rows) {
-    if (!rows || !rows.length) return;
-    var sec = document.createElement('div');
-    sec.className = 'sk-sek';
-    sec.innerHTML = '<h3>Ranking</h3><div class="sk-grid" id="sk-rg"></div>';
-    body.appendChild(sec);
-    var grid = document.getElementById('sk-rg');
-    for (var i = 0; i < rows.length; i++) {
-      var c = document.createElement('div');
-      c.className = 'sk-chip';
-      c.innerHTML = '<div class="r-d">' + rows[i].disiplin + '</div>'
-        + '<div class="r-k">' + rows[i].klasse + '</div>'
-        + '<div class="r-p">#' + rows[i].plass + '</div>';
-      grid.appendChild(c);
-    }
-  }
-
-  function hentKampProgram(cup2000Url) {
-    var tidM = cup2000Url.match(/tournamentid=(\d+)/i);
-    if (!tidM) return Promise.resolve([]);
-    var cupTid = tidM[1];
-    var formData = new URLSearchParams();
-    formData.append('TextBoxPlayerName', SN);
-    formData.append('TextBoxPlayerClub', SK);
-    formData.append('ButtonSearch', 'Search');
-    return fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=' + cupTid + '&search=1', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData.toString()
-    })
-    .then(function(r) { return r.text(); })
-    .then(function(html) {
-      var dp = new DOMParser();
-      var doc = dp.parseFromString(html, 'text/html');
-      var kamper = [];
-      var rows = doc.querySelectorAll('table tr');
-      for (var i = 0; i < rows.length; i++) {
-        var tds = rows[i].querySelectorAll('td');
-        if (tds.length < 4) continue;
-        var rowTxt = rows[i].textContent;
-        if (rowTxt.indexOf(SN) === -1 && rowTxt.indexOf(SK) === -1) continue;
+function hentRanking() {
+  return api('GetPlayerProfile', {
+    seasonid: SS, playerid: SI,
+    getplayerdata: false, showUserProfile: true, showheader: false
+  }).then(function(res) {
+    var html = String((res.d && res.d.Html) || res.d || '');
+    var rows = [];
+    var dp = new DOMParser();
+    var doc = dp.parseFromString(html, 'text/html');
+    var trs = doc.querySelectorAll('table tr');
+    for (var i = 0; i < trs.length; i++) {
+      var tds = trs[i].querySelectorAll('td');
+      if (tds.length >= 2) {
         var cells = [];
         for (var j = 0; j < tds.length; j++) cells.push(tds[j].textContent.trim());
-        var tid = '';
-        var bane = '';
-        var disc = '';
-        var mot = '';
-        var res = '';
-        for (var k = 0; k < cells.length; k++) {
-          if (/^\d{2}:\d{2}$/.test(cells[k])) tid = cells[k];
-          else if (/^[A-Za-z]\d+$/.test(cells[k]) || /^\d+$/.test(cells[k])) bane = cells[k];
-          else if (/^(HS|DS|HD|DD|MD|MX)/i.test(cells[k])) disc = cells[k];
-          else if (cells[k].length > 3 && cells[k].indexOf(SN) === -1 && cells[k] !== SK) mot = cells[k];
-          else if (/\d+-\d+/.test(cells[k])) res = cells[k];
-        }
-        if (tid || mot) kamper.push({ tid: tid, bane: bane, disc: disc, mot: mot, res: res });
+        var last = cells[cells.length - 1];
+        if (/^\d+$/.test(last)) rows.push({ disiplin: cells[0], klasse: cells[1] || '', plass: last });
       }
-      return kamper;
-    })
-    .catch(function() { return null; });
-  }
+    }
+    return rows;
+  });
+}
 
-  function visTurnering(t) {
-    var sec = document.createElement('div');
-    sec.className = 'sk-sek';
-    sec.style.marginBottom = '8px';
-    sec.innerHTML = '<h3>' + (t.dato || '') + ' ' + (t.navn || 'Turnering') + '</h3>';
-    body.appendChild(sec);
-    var div = document.createElement('div');
-    div.className = 'sk-t';
-    var rh = '';
-    for (var i = 0; i < t.registreringer.length; i++) {
-      var r = t.registreringer[i];
-      rh += '<div class="sk-row">'
-        + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
-        + '<span class="sk-disc">' + r.disiplin + '</span>'
-        + (r.makkere.length ? '<span class="sk-makker">m/ ' + r.makkere.join(', ') + '</span>' : '')
-        + '</div>';
+function finnTurneringer() {
+  var now = new Date();
+  var dd = String(now.getDate()).padStart(2, '0');
+  var mm = String(now.getMonth() + 1).padStart(2, '0');
+  var yyyy = now.getFullYear();
+  var fra = dd + '.' + mm + '.' + yyyy;
+
+  return api('GetSeasonPlan', {
+    seasonid: SS, regionids: null, agegroupids: null, classids: null,
+    strfrom: fra, strto: '31.12.' + yyyy,
+    strweekno: '', strweekno2: '', georegionids: null,
+    clubid: '', disciplines: null, playerid: null,
+    birthdate: null, age: null, points: null, gender: null,
+    publicseasonplan: true, showleague: false,
+    selectclientfunction: 'SeasonPlan.SelectTournament', page: 0
+  }).then(function(res) {
+    var html = String((res.d && (res.d.html || res.d.Html)) || res.d || '');
+    var kmap = {};
+    var re = /SeasonPlan\.SelectTournament\((\d+),\s*(\d+)\)/g;
+    var m;
+    while ((m = re.exec(html)) !== null) {
+      var tid = m[1], cid = m[2];
+      if (!kmap[tid]) kmap[tid] = { klasser: [], navn: '', dato: '', cup2000Url: '' };
+      if (kmap[tid].klasser.indexOf(cid) === -1) kmap[tid].klasser.push(cid);
     }
-    var kampDiv = '<div id="sk-kl-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center">Laster kampprogram...</div></div>';
-    var fallbackBtn = '<a class="sk-btn" href="' + t.cup2000Url + '&search=1" target="_blank" style="margin-top:4px;font-size:11px;background:#0f3460">Apne i Cup2000</a>';
-    if (t.cup2000Url) {
-      div.innerHTML = rh + kampDiv + fallbackBtn;
-    } else {
-      div.innerHTML = rh + '<div style="font-size:11px;color:#555;text-align:center;margin-top:8px">Program ikke publisert enna</div>';
+    var dp2 = new DOMParser();
+    var doc2 = dp2.parseFromString(html, 'text/html');
+    var trs2 = doc2.querySelectorAll('tr[onclick]');
+    for (var i = 0; i < trs2.length; i++) {
+      var oc = trs2[i].getAttribute('onclick');
+      var idM = oc && oc.match(/SelectTournament\((\d+),/);
+      if (!idM) continue;
+      var tid2 = idM[1];
+      if (!kmap[tid2] || kmap[tid2].navn) continue;
+      var tekst = trs2[i].textContent.replace(/\s+/g, ' ').trim();
+      var dm = tekst.match(/\d{2}\.\d{2}\.\d{4}/);
+      kmap[tid2].dato = dm ? dm[0] : '';
+      kmap[tid2].navn = tekst.substring(0, 80);
     }
-    body.appendChild(div);
-    if (t.cup2000Url) {
-      hentKampProgram(t.cup2000Url).then(function(kamper) {
+    var tids = Object.keys(kmap);
+    sett('Sjekker ' + tids.length + ' turneringer...');
+
+    return tids.reduce(function(chain, tid) {
+      return chain.then(function(funnet) {
+        var info = kmap[tid];
+        return hentAlleKlasser(tid).then(function(alleKlasser) {
+          info.klasser = alleKlasser;
+          return sjekkTurnering(tid, info).then(function(r) {
+            if (r) funnet.push(r);
+            return funnet;
+          });
+        });
+      });
+    }, Promise.resolve([]));
+  });
+}
+
+function hentAlleKlasser(tournamentId) {
+  return appApi({ command: 18, unionid: 200, tournamentid: parseInt(tournamentId), commandversion: 6 })
+    .then(function(data) {
+      var results = data.searchresult || [];
+      var ids = [];
+      for (var i = 0; i < results.length; i++) {
+        var classId = results[i][1];
+        if (classId && parseInt(classId) > 0) ids.push(String(classId));
+      }
+      return ids.length > 0 ? ids : [String(tournamentId)];
+    })
+    .catch(function() { return [String(tournamentId)]; });
+}
+
+function sjekkTurnering(tid, info) {
+  return info.klasser.reduce(function(chain, cid) {
+    return chain.then(function(regs) {
+      return api('SearchRegistrationsByClass', {
+        tournamentclassid: parseInt(cid),
+        clientselectfunction: 'SelectTournamentClass1'
+      }).then(function(res) {
+        var html = String((res.d && res.d.Html) || '');
+        if (html.indexOf(SI) !== -1 || html.indexOf(SN) !== -1) {
+          var klasser = parseKlasse(html);
+          for (var ki = 0; ki < klasser.length; ki++) regs.push(klasser[ki]);
+          var cupM = html.match(/cup2000\.dk[^\s"']*/i);
+          if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
+        }
+        return regs;
+      });
+    });
+  }, Promise.resolve([])).then(function(regs) {
+    if (!regs.length) return null;
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, cup2000Url: info.cup2000Url };
+  });
+}
+
+function parseKlasse(html) {
+  var results = [];
+  var pos = 0;
+  while (true) {
+    var idx = html.indexOf(SI, pos);
+    if (idx === -1) idx = html.indexOf(SN, pos);
+    if (idx === -1) break;
+    pos = idx + 1;
+    var before = html.substring(0, idx);
+    var h3s = before.lastIndexOf('<h3>');
+    var h3e = before.lastIndexOf('</h3>');
+    var disiplin = h3s >= 0 ? html.substring(h3s + 4, h3e).trim() : 'Ukjent';
+    var rowEnd = html.indexOf('</tr>', idx);
+    var row = html.substring(idx, rowEnd > 0 ? rowEnd : idx + 600);
+    var mm = row.match(/VisSpiller\/#\d+'[^>]*>([^<]+)<\/a>/g) || [];
+    var makkere = [];
+    for (var i = 0; i < mm.length; i++) {
+      var nm = mm[i].match(/>([^<]+)<\/a>/);
+      if (nm && nm[1].indexOf(SN) === -1) makkere.push(nm[1].trim());
+    }
+    var alreadyFound = false;
+    for (var d = 0; d < results.length; d++) {
+      if (results[d].disiplin === disiplin) { alreadyFound = true; break; }
+    }
+    if (!alreadyFound) {
+      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: row.indexOf('checkmark.gif') !== -1 });
+    }
+  }
+  return results;
+}
+
+function hentMotstanderRanking(navn, disc) {
+  return api('SearchPlayer', {
+    selectfunction: 'SP1', name: navn, clubid: '', playernumber: '',
+    gender: '', agegroupid: '', searchteam: false, licenseonly: false,
+    agegroupcontext: 0, tournamentdate: ''
+  }).then(function(res) {
+    var hmHtml = String((res.d && (res.d.Html || res.d.html)) || '');
+    var pidM = hmHtml.match(/VisSpiller\/#(\d+)/);
+    if (!pidM) return null;
+    return api('GetPlayerProfile', {
+      seasonid: SS, playerid: pidM[1],
+      getplayerdata: false, showUserProfile: true, showheader: false
+    }).then(function(res2) {
+      var html2 = String((res2.d && res2.d.Html) || '');
+      var dp3 = new DOMParser();
+      var doc3 = dp3.parseFromString(html2, 'text/html');
+      var trs3 = doc3.querySelectorAll('table tr');
+      var discKey = disc ? disc.toUpperCase().substring(0, 2) : '';
+      var discMap = {HS:'Herre',DS:'Dame',HD:'Herre',DD:'Dame',MD:'Mixed'};
+      var discFull = discMap[discKey] || '';
+      for (var ri = 0; ri < trs3.length; ri++) {
+        var tds3 = trs3[ri].querySelectorAll('td');
+        if (tds3.length >= 2) {
+          var cells3 = [];
+          for (var rj = 0; rj < tds3.length; rj++) cells3.push(tds3[rj].textContent.trim());
+          var last3 = cells3[cells3.length - 1];
+          if (/^\d+$/.test(last3) && discFull && cells3[0].indexOf(discFull) !== -1) {
+            return { plass: last3, klasse: cells3[1] || '' };
+          }
+        }
+      }
+      return null;
+    });
+  }).catch(function() { return null; });
+}
+
+function sett(tekst) {
+  document.getElementById('st').textContent = tekst;
+}
+
+function visRanking(rows) {
+  if (!rows || !rows.length) return;
+  var res = document.getElementById('resultat');
+  var sec = document.createElement('div');
+  sec.className = 'sk-sek';
+  sec.innerHTML = '<h3>Ranking</h3><div class="sk-grid" id="sk-rg"></div>';
+  res.appendChild(sec);
+  var grid = document.getElementById('sk-rg');
+  for (var i = 0; i < rows.length; i++) {
+    var c = document.createElement('div');
+    c.className = 'sk-chip';
+    c.innerHTML = '<div class="r-d">' + rows[i].disiplin + '</div>'
+      + '<div class="r-k">' + rows[i].klasse + '</div>'
+      + '<div class="r-p">#' + rows[i].plass + '</div>';
+    grid.appendChild(c);
+  }
+}
+
+function visTurnering(t) {
+  var res = document.getElementById('resultat');
+  var sec = document.createElement('div');
+  sec.className = 'sk-sek';
+  sec.innerHTML = '<h3>' + (t.dato || '') + ' ' + (t.navn || 'Turnering') + '</h3>';
+  res.appendChild(sec);
+  var div = document.createElement('div');
+  div.className = 'sk-t';
+  var rh = '';
+  for (var i = 0; i < t.registreringer.length; i++) {
+    var r = t.registreringer[i];
+    rh += '<div class="sk-row">'
+      + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
+      + '<span class="sk-disc">' + r.disiplin + '</span>'
+      + (r.makkere.length ? '<span class="sk-makker">m/ ' + r.makkere.join(', ') + '</span>' : '')
+      + '</div>';
+  }
+  var kampDiv = '<div id="sk-kl-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center">Laster kampprogram...</div></div>';
+  var fallbackBtn = t.cup2000Url ? '<a class="sk-btn" href="' + t.cup2000Url + '&search=1" target="_blank" style="margin-top:4px;font-size:11px;background:#0f3460">Åpne i Cup2000</a>' : '';
+  if (t.cup2000Url) {
+    div.innerHTML = rh + kampDiv + fallbackBtn;
+  } else {
+    div.innerHTML = rh + '<div style="font-size:11px;color:#555;text-align:center;margin-top:8px">Program ikke publisert ennå</div>';
+  }
+  res.appendChild(div);
+
+  if (t.cup2000Url) {
+    var tidM = t.cup2000Url.match(/tournamentid=(\d+)/i);
+    if (tidM) {
+      cup2000Api(tidM[1]).then(function(data) {
         var kl = document.getElementById('sk-kl-' + t.tournamentId);
         if (!kl) return;
-        if (!kamper || !kamper.length) {
+        var kamper = data && data.html ? parseKamper(data.html) : [];
+        if (!kamper.length) {
           kl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center">Ingen kamptider funnet</div>';
           return;
         }
@@ -564,52 +388,70 @@ var SPILLER_KLUBB = '';
       });
     }
   }
-
-  Promise.all([hentRanking(), finnTurneringer()]).then(function(res) {
-    st.textContent = '';
-    visRanking(res[0]);
-    if (!res[1].length) { st.textContent = 'Ingen kommende turneringer funnet.'; }
-    else { res[1].forEach(visTurnering); }
-  }).catch(function(e) { st.textContent = 'Feil: ' + e.message; });
-
-})();
-</script>
-
-<script>
-function genererBookmarklet() {
-  var navn  = document.getElementById('cfg-navn').value.trim();
-  var id    = document.getElementById('cfg-id').value.trim();
-  var klubb = document.getElementById('cfg-klubb').value.trim();
-
-  var src = document.getElementById('spillerkort-source').textContent;
-
-  src = src.replace("var SPILLER_NAVN  = ''",  "var SPILLER_NAVN  = '" + navn  + "'");
-  src = src.replace("var SPILLER_ID    = ''",  "var SPILLER_ID    = '" + id    + "'");
-  src = src.replace("var SPILLER_KLUBB = ''", "var SPILLER_KLUBB = '" + klubb + "'");
-
-  var minified = src
-    .replace(/\r\n/g, ' ')
-    .replace(/\n/g, ' ')
-    .replace(/\r/g, ' ')
-    .replace(/  +/g, ' ')
-    .trim();
-
-  var bm = 'javascript:' + encodeURIComponent(minified);
-  document.getElementById('bm-text').value = bm;
-  document.getElementById('bm-link').href = bm;
 }
 
-function kopier() {
-  var ta = document.getElementById('bm-text');
-  ta.select();
-  document.execCommand('copy');
-  var lbl = document.getElementById('kopiert');
-  lbl.style.display = 'inline';
-  setTimeout(function() { lbl.style.display = 'none'; }, 2500);
+function parseKamper(html) {
+  var dp = new DOMParser();
+  var doc = dp.parseFromString(html, 'text/html');
+  var kamper = [];
+  var rows = doc.querySelectorAll('table tr');
+  for (var i = 0; i < rows.length; i++) {
+    var tds = rows[i].querySelectorAll('td');
+    if (tds.length < 4) continue;
+    var rowTxt = rows[i].textContent;
+    if (rowTxt.indexOf(SN) === -1 && rowTxt.indexOf(SK) === -1) continue;
+    var cells = [];
+    for (var j = 0; j < tds.length; j++) cells.push(tds[j].textContent.trim());
+    var tid = '', bane = '', disc = '', mot = '', res = '';
+    for (var k = 0; k < cells.length; k++) {
+      if (/^\d{2}:\d{2}$/.test(cells[k])) tid = cells[k];
+      else if (/^[A-Za-z]\d+$/.test(cells[k]) || /^\d+$/.test(cells[k])) bane = cells[k];
+      else if (/^(HS|DS|HD|DD|MD|MX)/i.test(cells[k])) disc = cells[k];
+      else if (cells[k].length > 3 && cells[k].indexOf(SN) === -1 && cells[k] !== SK) mot = cells[k];
+      else if (/\d+-\d+/.test(cells[k])) res = cells[k];
+    }
+    if (tid || mot) kamper.push({ tid: tid, bane: bane, disc: disc, mot: mot, res: res });
+  }
+  return kamper;
 }
 
-window.onload = genererBookmarklet;
-</script>
+function hent() {
+  SN = document.getElementById('f-navn').value.trim();
+  SI = document.getElementById('f-id').value.trim();
+  SK = document.getElementById('f-klubb').value.trim();
 
+  if (!SN || !SI || !SK) { sett('Fyll inn alle felt.'); return; }
+
+  lagre();
+
+  var now0 = new Date();
+  var seasonStart = now0.getMonth() >= 7 ? now0.getFullYear() : now0.getFullYear() - 1;
+  SS = '200' + seasonStart;
+
+  var btn = document.getElementById('hent-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Henter...';
+
+  var res = document.getElementById('resultat');
+  res.innerHTML = '<div class="sk-status" id="st">Henter spillerinfo...</div>';
+
+  Promise.all([hentRanking(), finnTurneringer()]).then(function(data) {
+    sett('');
+    visRanking(data[0]);
+    if (!data[1].length) {
+      sett('Ingen kommende turneringer funnet.');
+    } else {
+      data[1].forEach(visTurnering);
+    }
+  }).catch(function(e) {
+    sett('Feil: ' + e.message);
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = '🔍 Hent spillerkort';
+  });
+}
+
+window.onload = laster;
+</script>
 </body>
 </html>
