@@ -57,14 +57,9 @@
   <label>Spillernavn (fullt)
     <input id="f-navn" type="text" placeholder="Ola Nordmann" autocomplete="off">
   </label>
-  <div id="formrad">
-    <label>Player ID
-      <input id="f-id" type="text" placeholder="50161" inputmode="numeric">
-    </label>
-    <label>Klubb
-      <input id="f-klubb" type="text" placeholder="Sotra" autocomplete="off">
-    </label>
-  </div>
+  <label>Klubb
+    <input id="f-klubb" type="text" placeholder="Sotra" autocomplete="off">
+  </label>
   <button id="hent-btn" onclick="hent()">🔍 Hent spillerkort</button>
 </div>
 
@@ -79,17 +74,22 @@ var SN, SI, SK, SS;
 
 function lagre() {
   localStorage.setItem('sk_navn', document.getElementById('f-navn').value);
-  localStorage.setItem('sk_id',   document.getElementById('f-id').value);
   localStorage.setItem('sk_klubb',document.getElementById('f-klubb').value);
 }
 
 function laster() {
   var n = localStorage.getItem('sk_navn');
-  var i = localStorage.getItem('sk_id');
   var k = localStorage.getItem('sk_klubb');
   if (n) document.getElementById('f-navn').value = n;
-  if (i) document.getElementById('f-id').value   = i;
   if (k) document.getElementById('f-klubb').value = k;
+}
+
+function sokSpiller(navn, klubb) {
+  return fetch(PROXY + '/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ navn: navn, klubb: klubb })
+  }).then(function(r) { return r.json(); });
 }
 
 function api(method, data) {
@@ -417,10 +417,9 @@ function parseKamper(html) {
 
 function hent() {
   SN = document.getElementById('f-navn').value.trim();
-  SI = document.getElementById('f-id').value.trim();
   SK = document.getElementById('f-klubb').value.trim();
 
-  if (!SN || !SI || !SK) { sett('Fyll inn alle felt.'); return; }
+  if (!SN || !SK) { sett('Fyll inn navn og klubb.'); return; }
 
   lagre();
 
@@ -433,16 +432,26 @@ function hent() {
   btn.textContent = '⏳ Henter...';
 
   var res = document.getElementById('resultat');
-  res.innerHTML = '<div class="sk-status" id="st">Henter spillerinfo...</div>';
+  res.innerHTML = '<div class="sk-status" id="st">Søker etter spiller...</div>';
 
-  Promise.all([hentRanking(), finnTurneringer()]).then(function(data) {
-    sett('');
-    visRanking(data[0]);
-    if (!data[1].length) {
-      sett('Ingen kommende turneringer funnet.');
-    } else {
-      data[1].forEach(visTurnering);
+  sokSpiller(SN, SK).then(function(data) {
+    if (data.error || !data.playerid) {
+      sett('Fant ikke spiller: ' + SN + ' / ' + SK);
+      btn.disabled = false;
+      btn.textContent = '🔍 Hent spillerkort';
+      return;
     }
+    SI = data.playerid;
+    sett('Henter spillerinfo...');
+    return Promise.all([hentRanking(), finnTurneringer()]).then(function(d) {
+      sett('');
+      visRanking(d[0]);
+      if (!d[1].length) {
+        sett('Ingen kommende turneringer funnet.');
+      } else {
+        d[1].forEach(visTurnering);
+      }
+    });
   }).catch(function(e) {
     sett('Feil: ' + e.message);
   }).finally(function() {
