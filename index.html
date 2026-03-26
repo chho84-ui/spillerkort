@@ -181,18 +181,15 @@ function finnTurneringer() {
     var tids = Object.keys(kmap);
     sett('Sjekker ' + tids.length + ' turneringer...');
 
-    return tids.reduce(function(chain, tid) {
-      return chain.then(function(funnet) {
-        var info = kmap[tid];
-        return hentAlleKlasser(tid).then(function(alleKlasser) {
-          info.klasser = alleKlasser;
-          return sjekkTurnering(tid, info).then(function(r) {
-            if (r) funnet.push(r);
-            return funnet;
-          });
-        });
+    return Promise.all(tids.map(function(tid) {
+      var info = kmap[tid];
+      return hentAlleKlasser(tid).then(function(alleKlasser) {
+        info.klasser = alleKlasser;
+        return sjekkTurnering(tid, info);
       });
-    }, Promise.resolve([]));
+    })).then(function(resultater) {
+      return resultater.filter(function(r) { return r !== null; });
+    });
   });
 }
 
@@ -211,23 +208,22 @@ function hentAlleKlasser(tournamentId) {
 }
 
 function sjekkTurnering(tid, info) {
-  return info.klasser.reduce(function(chain, cid) {
-    return chain.then(function(regs) {
-      return api('SearchRegistrationsByClass', {
-        tournamentclassid: parseInt(cid),
-        clientselectfunction: 'SelectTournamentClass1'
-      }).then(function(res) {
-        var html = String((res.d && res.d.Html) || '');
-        if (html.indexOf(SI) !== -1 || html.indexOf(SN) !== -1) {
-          var klasser = parseKlasse(html);
-          for (var ki = 0; ki < klasser.length; ki++) regs.push(klasser[ki]);
-          var cupM = html.match(/cup2000\.dk[^\s"']*/i);
-          if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
-        }
-        return regs;
-      });
-    });
-  }, Promise.resolve([])).then(function(regs) {
+  return Promise.all(info.klasser.map(function(cid) {
+    return api('SearchRegistrationsByClass', {
+      tournamentclassid: parseInt(cid),
+      clientselectfunction: 'SelectTournamentClass1'
+    }).then(function(res) {
+      var html = String((res.d && res.d.Html) || '');
+      if (html.indexOf(SI) === -1 && html.indexOf(SN) === -1) return [];
+      var cupM = html.match(/cup2000\.dk[^\s"']*/i);
+      if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
+      return parseKlasse(html);
+    }).catch(function() { return []; });
+  })).then(function(alleRegs) {
+    var regs = [];
+    for (var i = 0; i < alleRegs.length; i++) {
+      for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
+    }
     if (!regs.length) return null;
     return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, cup2000Url: info.cup2000Url };
   });
@@ -235,31 +231,22 @@ function sjekkTurnering(tid, info) {
 
 function parseKlasse(html) {
   var results = [];
-  var pos = 0;
-  while (true) {
-    var idx = html.indexOf(SI, pos);
-    if (idx === -1) idx = html.indexOf(SN, pos);
-    if (idx === -1) break;
-    pos = idx + 1;
-    var before = html.substring(0, idx);
-    var h3s = before.lastIndexOf('<h3>');
-    var h3e = before.lastIndexOf('</h3>');
-    var disiplin = h3s >= 0 ? html.substring(h3s + 4, h3e).trim() : 'Ukjent';
-    var rowEnd = html.indexOf('</tr>', idx);
-    var row = html.substring(idx, rowEnd > 0 ? rowEnd : idx + 600);
-    var mm = row.match(/VisSpiller\/#\d+'[^>]*>([^<]+)<\/a>/g) || [];
+  var sections = html.split('<h3>');
+  for (var s = 1; s < sections.length; s++) {
+    var sec = sections[s];
+    var titleEnd = sec.indexOf('</h3>');
+    if (titleEnd === -1) continue;
+    var disiplin = sec.substring(0, titleEnd).trim();
+    var content = sec.substring(titleEnd);
+    if (content.indexOf(SI) === -1 && content.indexOf(SN) === -1) continue;
+    var re = /VisSpiller\/#\d+['"'][^>]*>([^<]+)<\/a>/g;
+    var m;
     var makkere = [];
-    for (var i = 0; i < mm.length; i++) {
-      var nm = mm[i].match(/>([^<]+)<\/a>/);
-      if (nm && nm[1].indexOf(SN) === -1) makkere.push(nm[1].trim());
+    while ((m = re.exec(content)) !== null) {
+      var name = m[1].trim();
+      if (name && name.indexOf(SN) === -1) makkere.push(name);
     }
-    var alreadyFound = false;
-    for (var d = 0; d < results.length; d++) {
-      if (results[d].disiplin === disiplin) { alreadyFound = true; break; }
-    }
-    if (!alreadyFound) {
-      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: row.indexOf('checkmark.gif') !== -1 });
-    }
+    results.push({ disiplin: disiplin, makkere: makkere, bekreftet: content.indexOf('checkmark.gif') !== -1 });
   }
   return results;
 }
