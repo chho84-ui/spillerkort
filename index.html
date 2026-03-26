@@ -231,49 +231,33 @@ function sjekkTurnering(tid, info) {
 
 function parseKlasse(html) {
   var results = [];
-  var sections = html.split('<h3>');
-  for (var s = 1; s < sections.length; s++) {
-    var sec = sections[s];
-    var titleEnd = sec.indexOf('</h3>');
-    if (titleEnd === -1) continue;
-    var disiplin = sec.substring(0, titleEnd).trim();
-    var content = sec.substring(titleEnd);
-    if (content.indexOf(SI) === -1 && content.indexOf(SN) === -1) continue;
-    var reLink = /VisSpiller\/#\d+['"?][^>]*>([^<]+)<\/a>/g;
-    var makkere = [];
-    var foundRowStart = -1;
-    var trIdx = 0;
-    while (true) {
-      var trStart = content.indexOf('<tr', trIdx);
-      if (trStart === -1) break;
-      var trEnd = content.indexOf('</tr>', trStart);
-      var row = content.substring(trStart, trEnd > 0 ? trEnd + 5 : trStart + 800);
-      if (row.indexOf(SI) !== -1 || row.indexOf(SN) !== -1) {
-        foundRowStart = trStart;
-        reLink.lastIndex = 0;
-        var m;
-        while ((m = reLink.exec(row)) !== null) {
-          var name = m[1].trim();
-          if (name && name.indexOf(SN) === -1) makkere.push(name);
+  var dp = new DOMParser();
+  var doc = dp.parseFromString(html, 'text/html');
+  var h3s = doc.querySelectorAll('h3');
+  for (var i = 0; i < h3s.length; i++) {
+    var disiplin = h3s[i].textContent.trim();
+    var table = h3s[i].nextElementSibling;
+    if (!table) continue;
+    var trs = table.querySelectorAll('tr');
+    for (var j = 0; j < trs.length; j++) {
+      var tr = trs[j];
+      var links = tr.querySelectorAll('a[href*="VisSpiller"]');
+      var hasPlayer = false;
+      var makkere = [];
+      for (var k = 0; k < links.length; k++) {
+        var href = links[k].getAttribute('href') || '';
+        var name = links[k].textContent.trim();
+        if (href.indexOf('VisSpiller/#' + SI) !== -1 || name === SN) {
+          hasPlayer = true;
+        } else if (name) {
+          makkere.push(name);
         }
+      }
+      if (hasPlayer) {
+        results.push({ disiplin: disiplin, makkere: makkere, bekreftet: tr.innerHTML.indexOf('checkmark.gif') !== -1 });
         break;
       }
-      trIdx = trStart + 1;
     }
-    if (!makkere.length && foundRowStart !== -1 && disiplin.toLowerCase().indexOf('single') === -1) {
-      var nextTrStart = content.indexOf('<tr', foundRowStart + 1);
-      if (nextTrStart !== -1) {
-        var nextTrEnd = content.indexOf('</tr>', nextTrStart);
-        var nextRow = content.substring(nextTrStart, nextTrEnd > 0 ? nextTrEnd + 5 : nextTrStart + 800);
-        reLink.lastIndex = 0;
-        var m2;
-        while ((m2 = reLink.exec(nextRow)) !== null) {
-          var name2 = m2[1].trim();
-          if (name2 && name2.indexOf(SN) === -1) makkere.push(name2);
-        }
-      }
-    }
-    results.push({ disiplin: disiplin, makkere: makkere, bekreftet: content.indexOf('checkmark.gif') !== -1 });
   }
   return results;
 }
