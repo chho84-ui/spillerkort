@@ -199,18 +199,23 @@ function hentAlleKlasser(tournamentId) {
   return appApi({ command: 18, unionid: 200, tournamentid: parseInt(tournamentId), commandversion: 6 })
     .then(function(data) {
       var results = data.searchresult || [];
-      var ids = [];
+      var klasser = [];
       for (var i = 0; i < results.length; i++) {
         var classId = results[i][1];
-        if (classId && parseInt(classId) > 0) ids.push(String(classId));
+        var className = String(results[i][0] || '');
+        if (classId && parseInt(classId) > 0) klasser.push({ id: String(classId), name: className });
       }
-      return ids.length > 0 ? ids : [String(tournamentId)];
+      return klasser.length > 0 ? klasser : [{ id: String(tournamentId), name: '' }];
     })
-    .catch(function() { return [String(tournamentId)]; });
+    .catch(function() { return [{ id: String(tournamentId), name: '' }]; });
 }
 
 function sjekkTurnering(tid, info) {
-  return Promise.all(info.klasser.map(function(cid) {
+  return Promise.all(info.klasser.map(function(kl) {
+    var cid = kl.id || kl;  // bakoverkompatibel med bare-streng
+    var klasseNavn = kl.name || '';
+    var ageGroupM = klasseNavn.match(/^(U\d+|Senior|Junior|SEN)/i);
+    var ageGroup = ageGroupM ? ageGroupM[1].toUpperCase() : '';
     return api('SearchRegistrationsByClass', {
       tournamentclassid: parseInt(cid),
       clientselectfunction: 'SelectTournamentClass1'
@@ -219,7 +224,7 @@ function sjekkTurnering(tid, info) {
       if (html.indexOf(SI) === -1 && html.indexOf(SN) === -1) return [];
       var cupM = html.match(/cup2000\.dk[^\s"']*/i);
       if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
-      return parseKlasse(html);
+      return parseKlasse(html, ageGroup);
     }).catch(function() { return []; });
   })).then(function(alleRegs) {
     var regs = [];
@@ -231,7 +236,8 @@ function sjekkTurnering(tid, info) {
   });
 }
 
-function parseKlasse(html) {
+function parseKlasse(html, ageGroup) {
+  ageGroup = ageGroup || '';
   var results = [];
   var dp = new DOMParser();
   var doc = dp.parseFromString(html, 'text/html');
@@ -273,13 +279,13 @@ function parseKlasse(html) {
         || candidateRows.find(function(c) { return !c.isXmakker; })
         || candidateRows[0];
       var makkere = best.isXmakker && !best.makkere.length ? [{ navn: 'X-makker', klubb: '' }] : best.makkere;
-      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: best.tr.innerHTML.indexOf('checkmark.gif') !== -1 });
+      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: best.tr.innerHTML.indexOf('checkmark.gif') !== -1, ageGroup: ageGroup });
     }
   }
   return results;
 }
 
-function hentMotstanderRanking(navn, disc, oliverDisiplin) {
+function hentMotstanderRanking(navn, disc, ageGroup) {
   return api('SearchPlayer', {
     selectfunction: 'SP1', name: navn, clubid: '', playernumber: '',
     gender: '', agegroupid: '', searchteam: false, licenseonly: false,
@@ -312,14 +318,10 @@ function hentMotstanderRanking(navn, disc, oliverDisiplin) {
         }
       }
       if (!allMatches.length) return null;
-      if (oliverDisiplin) {
-        // Trekk ut aldersgruppe fra Olivers disiplin, f.eks. "U15 Herredouble" -> "U15"
-        var ageM = oliverDisiplin.match(/^(U\d+|Senior|Junior)/i);
-        var ageGroup = ageM ? ageM[1].toUpperCase() : '';
-        if (ageGroup) {
-          var ageMatch = allMatches.find(function(m) { return m.rankingliste.toUpperCase().indexOf(ageGroup) === 0; });
-          if (ageMatch) return ageMatch;
-        }
+      if (ageGroup) {
+        // Match aldersgruppe direkte mot rankingliste-kolonnen
+        var ageMatch = allMatches.find(function(m) { return m.rankingliste.toUpperCase().indexOf(ageGroup) === 0; });
+        if (ageMatch) return ageMatch;
       }
       // Fallback: første treff
       return allMatches[0];
@@ -402,11 +404,15 @@ function visTurnering(t) {
     (function(reg, idx) {
       if (!reg.makkere.length || reg.makkere[0].navn === 'X-makker') return;
       var kode = discTilKode(reg.disiplin);
-      var discMap2 = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
-      var discFull2 = discMap2[kode] || '';
-      var oliverRow = oliverRanking.find(function(r) { return discFull2 && r.disiplin.indexOf(discFull2) !== -1; });
-      var oliverDisiplin = oliverRow ? oliverRow.disiplin : '';
-      hentMotstanderRanking(reg.makkere[0].navn, kode, oliverDisiplin).then(function(ranking) {
+      // Bruk aldersgruppe fra turneringsklassen (f.eks. "U15" fra "U15 A"), fallback til olivers ranking
+      var regAgeGroup = reg.ageGroup || '';
+      if (!regAgeGroup) {
+        var discMap2 = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
+        var discFull2 = discMap2[kode] || '';
+        var oliverRow = oliverRanking.find(function(r) { return discFull2 && r.disiplin.indexOf(discFull2) !== -1; });
+        regAgeGroup = oliverRow ? (oliverRow.disiplin.match(/^(U\d+|Senior|Junior)/i) || ['',''])[1].toUpperCase() : '';
+      }
+      hentMotstanderRanking(reg.makkere[0].navn, kode, regAgeGroup).then(function(ranking) {
         if (!ranking) return;
         var el = document.getElementById('sk-mkr-' + t.tournamentId + '-' + idx);
         if (el) el.textContent = '#' + ranking.plass;
