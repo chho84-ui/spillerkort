@@ -239,12 +239,23 @@ function parseKlasse(html) {
     var disiplin = sec.substring(0, titleEnd).trim();
     var content = sec.substring(titleEnd);
     if (content.indexOf(SI) === -1 && content.indexOf(SN) === -1) continue;
-    var re = /VisSpiller\/#\d+['"'][^>]*>([^<]+)<\/a>/g;
-    var m;
     var makkere = [];
-    while ((m = re.exec(content)) !== null) {
-      var name = m[1].trim();
-      if (name && name.indexOf(SN) === -1) makkere.push(name);
+    var trIdx = 0;
+    while (true) {
+      var trStart = content.indexOf('<tr', trIdx);
+      if (trStart === -1) break;
+      var trEnd = content.indexOf('</tr>', trStart);
+      var row = content.substring(trStart, trEnd > 0 ? trEnd + 5 : trStart + 800);
+      if (row.indexOf(SI) !== -1 || row.indexOf(SN) !== -1) {
+        var re = /VisSpiller\/#\d+['"'][^>]*>([^<]+)<\/a>/g;
+        var m;
+        while ((m = re.exec(row)) !== null) {
+          var name = m[1].trim();
+          if (name && name.indexOf(SN) === -1) makkere.push(name);
+        }
+        break;
+      }
+      trIdx = trStart + 1;
     }
     results.push({ disiplin: disiplin, makkere: makkere, bekreftet: content.indexOf('checkmark.gif') !== -1 });
   }
