@@ -289,7 +289,7 @@ function hentMotstanderRanking(navn, disc) {
       var doc3 = dp3.parseFromString(html2, 'text/html');
       var trs3 = doc3.querySelectorAll('table tr');
       var discKey = disc ? disc.toUpperCase().substring(0, 2) : '';
-      var discMap = {HS:'Herre',DS:'Dame',HD:'Herre',DD:'Dame',MD:'Mixed'};
+      var discMap = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
       var discFull = discMap[discKey] || '';
       for (var ri = 0; ri < trs3.length; ri++) {
         var tds3 = trs3[ri].querySelectorAll('td');
