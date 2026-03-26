@@ -254,6 +254,10 @@ function parseKlasse(html) {
         }
       }
       if (hasPlayer) {
+        // Hvis ingen partner-link, sjekk om "X-makker" (ikke-koblet påmelding)
+        if (!makkere.length && tr.innerHTML.indexOf('X-makker') !== -1) {
+          makkere.push('X-makker');
+        }
         results.push({ disiplin: disiplin, makkere: makkere, bekreftet: tr.innerHTML.indexOf('checkmark.gif') !== -1 });
         break;
       }
@@ -334,7 +338,7 @@ function visTurnering(t) {
     rh += '<div class="sk-row">'
       + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
       + '<span class="sk-disc">' + r.disiplin + '</span>'
-      + (r.makkere.length ? '<span class="sk-makker">m/ ' + r.makkere.join(', ') + '</span>' : '')
+      + (r.makkere.length ? '<span class="sk-makker">' + (r.makkere[0] === 'X-makker' ? '(uten makker)' : 'm/ ' + r.makkere.join(', ')) + '</span>' : '')
       + '</div>';
   }
   var kampDiv = '<div id="sk-kl-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center">Laster kampprogram...</div></div>';
