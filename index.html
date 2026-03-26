@@ -271,7 +271,7 @@ function hentMotstanderRanking(navn, disc) {
     agegroupcontext: 0, tournamentdate: ''
   }).then(function(res) {
     var hmHtml = String((res.d && (res.d.Html || res.d.html)) || '');
-    var pidM = hmHtml.match(/VisSpiller\/#(\d+)/);
+    var pidM = hmHtml.match(/SP1\('(\d+)'/);
     if (!pidM) return null;
     return api('GetPlayerProfile', {
       seasonid: SS, playerid: pidM[1],
