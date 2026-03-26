@@ -239,11 +239,13 @@ function parseKlasse(html) {
     var table = h3s[i].nextElementSibling;
     if (!table) continue;
     var trs = table.querySelectorAll('tr');
+    var candidateRows = [];
     for (var j = 0; j < trs.length; j++) {
       var tr = trs[j];
       var links = tr.querySelectorAll('a[href*="VisSpiller"]');
       var hasPlayer = false;
       var makkere = [];
+      var isXmakker = tr.innerHTML.indexOf('X-makker') !== -1;
       for (var k = 0; k < links.length; k++) {
         var href = links[k].getAttribute('href') || '';
         var name = links[k].textContent.trim();
@@ -254,13 +256,16 @@ function parseKlasse(html) {
         }
       }
       if (hasPlayer) {
-        // Hvis ingen partner-link, sjekk om "X-makker" (ikke-koblet påmelding)
-        if (!makkere.length && tr.innerHTML.indexOf('X-makker') !== -1) {
-          makkere.push('X-makker');
-        }
-        results.push({ disiplin: disiplin, makkere: makkere, bekreftet: tr.innerHTML.indexOf('checkmark.gif') !== -1 });
-        break;
+        candidateRows.push({ makkere: makkere, isXmakker: isXmakker, tr: tr });
       }
+    }
+    if (candidateRows.length) {
+      // Foretrekk rad med ekte makker fremfor X-makker
+      var best = candidateRows.find(function(c) { return !c.isXmakker && c.makkere.length > 0; })
+        || candidateRows.find(function(c) { return !c.isXmakker; })
+        || candidateRows[0];
+      var makkere = best.isXmakker && !best.makkere.length ? ['X-makker'] : best.makkere;
+      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: best.tr.innerHTML.indexOf('checkmark.gif') !== -1 });
     }
   }
   return results;
