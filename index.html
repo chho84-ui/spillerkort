@@ -297,14 +297,26 @@ function parseKlasse(html, ageGroup) {
   return results;
 }
 
-function hentMotstanderRanking(navn, disc, ageGroup) {
+function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
   return api('SearchPlayer', {
     selectfunction: 'SP1', name: navn, clubid: '', playernumber: '',
     gender: '', agegroupid: '', searchteam: false, licenseonly: false,
     agegroupcontext: 0, tournamentdate: ''
   }).then(function(res) {
     var hmHtml = String((res.d && (res.d.Html || res.d.html)) || '');
-    var pidM = hmHtml.match(/SP1\('(\d+)'/);
+    // Finn riktig spiller: foretrekk treff der klubb matcher
+    var pidM = null;
+    if (klubb) {
+      var re2 = /SP1\('(\d+)'[^>]*>[^<]*<\/a>[^<]*,\s*([^<'"\n]{2,40})/g;
+      var m2;
+      while ((m2 = re2.exec(hmHtml)) !== null) {
+        if (m2[2].toLowerCase().indexOf(klubb.toLowerCase().substring(0,5)) !== -1) {
+          pidM = [null, m2[1]];
+          break;
+        }
+      }
+    }
+    if (!pidM) pidM = hmHtml.match(/SP1\('(\d+)'/);
     if (!pidM) return null;
     return api('GetPlayerProfile', {
       seasonid: SS, playerid: pidM[1],
@@ -482,15 +494,17 @@ function visTurnering(t) {
             }
             // For dobbel: søk på første spiller ("A / B" → "A")
             var motNavn = (kamp.mot || '').split(' / ')[0].trim();
-            hentMotstanderRanking(motNavn, kamp.disc, regAgeGroup).then(function(ranking) {
+            var motKlubb2 = (kamp.motKlubb || '').split(' / ')[0].trim();
+            hentMotstanderRanking(motNavn, kamp.disc, regAgeGroup, motKlubb2).then(function(ranking) {
               if (!ranking) return;
               var motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
               if (!motEl) return;
               var chip = document.createElement('span');
               chip.className = 'sk-rank-mini';
-              chip.style.marginRight = '4px';
+              chip.style.marginLeft = '4px';
               chip.textContent = '#' + ranking.plass;
-              motEl.insertBefore(chip, motEl.firstChild);
+              var subSpan = motEl.querySelector('.sk-kamp-mot-sub');
+              motEl.insertBefore(chip, subSpan);
             });
           })(kamper[mi], mi);
         }
