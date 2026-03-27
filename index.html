@@ -49,6 +49,7 @@
   .sk-kamp-mot-sub { display: block; font-size: 10px; color: #888; }
   .sk-kamp-res { color: #7fffd4; min-width: 50px; text-align: right; }
   .sk-rank-mini { font-size: 9px; background: #0f3460; color: #e94560; padding: 1px 4px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+  .sk-born-mini { font-size: 9px; color: #666; margin-left: 2px; vertical-align: middle; }
   .sk-kamp-next { background: rgba(127,255,212,.07); border-left: 2px solid #7fffd4; padding-left: 4px; border-radius: 0 4px 4px 0; }
   .sk-kamp-next .sk-kamp-tid { color: #7fffd4; }
   .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
@@ -351,13 +352,17 @@ function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
           }
         }
       }
-      if (!allMatches.length) return null;
+      // Hent fødselsår fra profilen
+      var fodtM = html2.match(/dt<\/h2>\s*(\d{4})/i);
+      var fodt = fodtM ? fodtM[1] : null;
+
+      if (!allMatches.length) return fodt ? { plass: null, rankingliste: '', fodt: fodt } : null;
       if (ageGroupNorm) {
-        // Match aldersgruppe direkte mot rankingliste-kolonnen
         var ageMatch = allMatches.find(function(m) { return m.rankingliste.toUpperCase().indexOf(ageGroupNorm) === 0; });
-        if (ageMatch) return ageMatch;
+        if (ageMatch) { ageMatch.fodt = fodt; return ageMatch; }
       }
       // Fallback: første treff
+      allMatches[0].fodt = fodt;
       return allMatches[0];
     });
   }).catch(function() { return null; });
@@ -566,15 +571,15 @@ function visTurnering(t) {
                   motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
                 }
                 if (!motEl) return;
-                var chip = document.createElement('span');
-                chip.className = 'sk-rank-mini';
-                chip.style.marginLeft = '3px';
-                chip.textContent = '#' + ranking.plass;
-                if (spillere.length > 1) {
-                  motEl.appendChild(chip);
-                } else {
-                  var subSpan2 = motEl.querySelector('.sk-kamp-mot-sub');
-                  motEl.insertBefore(chip, subSpan2);
+                  var bornChip = ranking.fodt ? document.createElement('span') : null;
+                  if (bornChip) { bornChip.className = 'sk-born-mini'; bornChip.textContent = '(' + ranking.fodt + ')'; }
+                  if (spillere.length > 1) {
+                    if (ranking.plass) { var chip = document.createElement('span'); chip.className = 'sk-rank-mini'; chip.style.marginLeft = '3px'; chip.textContent = '#' + ranking.plass; motEl.appendChild(chip); }
+                    if (bornChip) motEl.appendChild(bornChip);
+                  } else {
+                    var subSpan2 = motEl.querySelector('.sk-kamp-mot-sub');
+                    if (ranking.plass) { var chip = document.createElement('span'); chip.className = 'sk-rank-mini'; chip.style.marginLeft = '3px'; chip.textContent = '#' + ranking.plass; motEl.insertBefore(chip, subSpan2); }
+                    if (bornChip) motEl.insertBefore(bornChip, subSpan2);
                 }
               });
             })(spiller.navn, spiller.klubb, si);
