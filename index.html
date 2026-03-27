@@ -109,11 +109,11 @@ function appApi(data) {
   }).then(function(r) { return r.json(); });
 }
 
-function cup2000Api(tournamentid) {
+function cup2000Api(tournamentNavn) {
   return fetch(PROXY + '/cup2000', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tournamentid: tournamentid, navn: SN, klubb: SK })
+    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK })
   }).then(function(r) { return r.json(); });
 }
 
@@ -402,11 +402,7 @@ function visTurnering(t) {
   }
   var kampDiv = '<div id="sk-kl-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center">Laster kampprogram...</div></div>';
   var fallbackBtn = t.cup2000Url ? '<a class="sk-btn" href="' + t.cup2000Url + '&search=1" target="_blank" style="margin-top:4px;font-size:11px;background:#0f3460">Åpne i Cup2000</a>' : '';
-  if (t.cup2000Url) {
-    div.innerHTML = rh + kampDiv + fallbackBtn;
-  } else {
-    div.innerHTML = rh + '<div style="font-size:11px;color:#555;text-align:center;margin-top:8px">Program ikke publisert ennå</div>';
-  }
+  div.innerHTML = rh + kampDiv + fallbackBtn;
   res.appendChild(div);
 
   // Hent ranking for makkere asynkront
@@ -430,17 +426,15 @@ function visTurnering(t) {
     })(t.registreringer[mi], mi);
   }
 
-  if (t.cup2000Url) {
-    var tidM = t.cup2000Url.match(/tournamentid=(\d+)/i);
-    if (tidM) {
-      cup2000Api(tidM[1]).then(function(data) {
-        var kl = document.getElementById('sk-kl-' + t.tournamentId);
-        if (!kl) return;
-        var kamper = data && data.html ? parseKamper(data.html) : [];
-        if (!kamper.length) {
-          kl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center">Ingen kamptider funnet</div>';
-          return;
-        }
+  if (true) {
+    cup2000Api(t.navn).then(function(data) {
+      var kl = document.getElementById('sk-kl-' + t.tournamentId);
+      if (!kl) return;
+      var kamper = data && data.kamper ? data.kamper : (data && data.html ? parseKamper(data.html) : []);
+      if (!kamper.length) {
+        kl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center">Program ikke publisert ennå</div>';
+        return;
+      }
         var kh = '';
         for (var i = 0; i < kamper.length; i++) {
           var k = kamper[i];
@@ -468,7 +462,6 @@ function visTurnering(t) {
           })(kamper[mi], mi);
         }
       });
-    }
   }
 }
 
