@@ -41,8 +41,8 @@
   .sk-disc-group { margin-bottom: 6px; }
   .sk-disc-header { font-size: 10px; font-weight: bold; color: #53d8fb; text-transform: uppercase; letter-spacing: .06em; padding: 4px 0 2px; border-bottom: 1px solid #1a2a4a; margin-bottom: 2px; }
   .sk-kamp { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #0a0a20; font-size: 12px; align-items: flex-start; }
-  .sk-kamp-tid { color: #53d8fb; font-weight: bold; min-width: 50px; padding-top: 1px; }
-  .sk-kamp-bane { color: #888; min-width: 28px; padding-top: 1px; }
+  .sk-kamp-tid { color: #53d8fb; font-weight: bold; min-width: 80px; padding-top: 1px; font-size: 11px; }
+  .sk-kamp-bane { color: #888; min-width: 24px; padding-top: 1px; font-size: 11px; }
   .sk-kamp-mot { flex: 1; color: #e0e0e0; }
   .sk-kamp-mot-sub { display: block; font-size: 10px; color: #888; }
   .sk-kamp-res { color: #7fffd4; min-width: 50px; text-align: right; }
@@ -480,12 +480,15 @@ function visTurnering(t) {
                 }
               }
             }
-            hentMotstanderRanking(kamp.mot, kamp.disc, regAgeGroup).then(function(ranking) {
+            // For dobbel: søk på første spiller ("A / B" → "A")
+            var motNavn = (kamp.mot || '').split(' / ')[0].trim();
+            hentMotstanderRanking(motNavn, kamp.disc, regAgeGroup).then(function(ranking) {
               if (!ranking) return;
               var motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
-                    if (!motEl) return;
+              if (!motEl) return;
               var chip = document.createElement('span');
               chip.className = 'sk-rank-mini';
+              chip.style.marginRight = '4px';
               chip.textContent = '#' + ranking.plass;
               motEl.insertBefore(chip, motEl.firstChild);
             });
