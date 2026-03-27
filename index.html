@@ -481,9 +481,6 @@ function visTurnering(t) {
         // Sorter kamper etter tidspunkt
         var DISC_LABELS = { HS: 'Herresingle', DS: 'Damesingle', HD: 'Herredouble', DD: 'Damedouble', MD: 'Mixed double' };
         kamper.sort(function(a, b) { return (a.tid || '').localeCompare(b.tid || ''); });
-        // Tell kamper per disiplin
-        var discCounts = {};
-        for (var ci = 0; ci < kamper.length; ci++) { var cdc = kamper[ci].disc || 'HS'; discCounts[cdc] = (discCounts[cdc] || 0) + 1; }
         // Finn neste kamp (første uten resultat med fremtidig tid)
         var nowT = new Date();
         var nextKampIdx = -1;
@@ -498,8 +495,11 @@ function visTurnering(t) {
           var dc = k.disc || 'HS';
           if (dc !== prevDisc) {
             if (prevDisc !== null) kh += '</div>'; // close previous group
+            // Count only consecutive matches in this group
+            var groupCount = 0;
+            for (var gc = i; gc < kamper.length && (kamper[gc].disc || 'HS') === dc; gc++) groupCount++;
             kh += '<div class="sk-disc-group"><div class="sk-disc-header">' + (DISC_LABELS[dc] || dc)
-              + '<span class="sk-disc-count">· ' + (discCounts[dc] || 0) + '</span></div>';
+              + '<span class="sk-disc-count">· ' + groupCount + '</span></div>';
             prevDisc = dc;
           }
           kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + '">'
