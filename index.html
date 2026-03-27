@@ -328,7 +328,7 @@ function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
       var trs3 = doc3.querySelectorAll('table tr');
       var discKey = disc ? disc.toUpperCase().substring(0, 2) : '';
       // Bruker norsk stavemåte (Herresingel, ikke Herresingle)
-      var discMap = {HS:'Herresingel',DS:'Damesingel',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
+      var discMap = {HS:'Herresingel',DS:'Damesingel',HD:'Herredouble',DD:'Damedouble',MD:'Mixeddouble'};
       var discFull = discMap[discKey] || '';
       // Normaliser ageGroup: "U15 A" → "U15", "SEN A" → "SEN"
       var ageGroupNorm = ageGroup ? ageGroup.replace(/\s+[A-Z]$/i, '').trim().toUpperCase() : '';
