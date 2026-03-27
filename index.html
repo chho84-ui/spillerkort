@@ -327,8 +327,11 @@ function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
       var doc3 = dp3.parseFromString(html2, 'text/html');
       var trs3 = doc3.querySelectorAll('table tr');
       var discKey = disc ? disc.toUpperCase().substring(0, 2) : '';
-      var discMap = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
+      // Bruker norsk stavemåte (Herresingel, ikke Herresingle)
+      var discMap = {HS:'Herresingel',DS:'Damesingel',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
       var discFull = discMap[discKey] || '';
+      // Normaliser ageGroup: "U15 A" → "U15", "SEN A" → "SEN"
+      var ageGroupNorm = ageGroup ? ageGroup.replace(/\s+[A-Z]$/i, '').trim().toUpperCase() : '';
       var allMatches = [];
       for (var ri = 0; ri < trs3.length; ri++) {
         var tds3 = trs3[ri].querySelectorAll('td');
@@ -342,9 +345,9 @@ function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
         }
       }
       if (!allMatches.length) return null;
-      if (ageGroup) {
+      if (ageGroupNorm) {
         // Match aldersgruppe direkte mot rankingliste-kolonnen
-        var ageMatch = allMatches.find(function(m) { return m.rankingliste.toUpperCase().indexOf(ageGroup) === 0; });
+        var ageMatch = allMatches.find(function(m) { return m.rankingliste.toUpperCase().indexOf(ageGroupNorm) === 0; });
         if (ageMatch) return ageMatch;
       }
       // Fallback: første treff
