@@ -39,7 +39,7 @@
   .sk-disc { flex: 1; font-size: 13px; }
   .sk-makker { font-size: 11px; color: #888; }
   .sk-btn { display: block; text-align: center; background: #e94560; color: #fff; text-decoration: none; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 12px; font-weight: bold; }
-  .sk-kamplist { margin-top: 8px; border-top: 1px solid #0f3460; padding-top: 6px; }
+  .sk-kamplist { margin: 0 0 6px 24px; padding: 2px 0 4px 8px; border-left: 2px solid #1a2a4a; }
   .sk-disc-group { margin-bottom: 6px; }
   .sk-disc-header { font-size: 10px; font-weight: bold; color: #53d8fb; text-transform: uppercase; letter-spacing: .06em; padding: 4px 0 2px; border-bottom: 1px solid #1a2a4a; margin-bottom: 2px; }
   .sk-kamp { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #0a0a20; font-size: 12px; align-items: flex-start; }
@@ -441,11 +441,13 @@ function visTurnering(t) {
       + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
       + '<span class="sk-disc">' + r.disiplin + '</span>'
       + makkerHtml
+      + '</div>'
+      + '<div id="sk-kl-' + t.tournamentId + '-' + i + '" class="sk-kamplist">'
+      + '<div style="font-size:11px;color:#555;text-align:center;padding:2px 0">Laster kampprogram...</div>'
       + '</div>';
   }
-  var kampDiv = '<div id="sk-kl-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center">Laster kampprogram...</div></div>';
   var fallbackBtn = t.cup2000Url ? '<a class="sk-btn" href="' + t.cup2000Url + '&search=1" target="_blank" style="margin-top:4px;font-size:11px;background:#0f3460">Åpne i Cup2000</a>' : '';
-  div.innerHTML = rh + kampDiv + fallbackBtn;
+  div.innerHTML = rh + fallbackBtn;
   res.appendChild(div);
 
   // Hent ranking for makkere asynkront
@@ -471,37 +473,49 @@ function visTurnering(t) {
 
   if (true) {
     cup2000Api(t.navn).then(function(data) {
-      var kl = document.getElementById('sk-kl-' + t.tournamentId);
-      if (!kl) return;
       var kamper = data && data.kamper ? data.kamper : (data && data.html ? parseKamper(data.html) : []);
-      if (!kamper.length) {
-        kl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center">Program ikke publisert ennå</div>';
-        return;
+      // Clear loading placeholders
+      for (var ci = 0; ci < t.registreringer.length; ci++) {
+        var klc = document.getElementById('sk-kl-' + t.tournamentId + '-' + ci);
+        if (klc) klc.innerHTML = '';
       }
-        // Sorter kamper etter tidspunkt
-        var DISC_LABELS = { HS: 'Herresingle', DS: 'Damesingle', HD: 'Herredouble', DD: 'Damedouble', MD: 'Mixed double' };
-        kamper.sort(function(a, b) { return (a.tid || '').localeCompare(b.tid || ''); });
-        // Finn neste kamp (første uten resultat med fremtidig tid)
-        var nowT = new Date();
-        var nextKampIdx = -1;
-        for (var ni = 0; ni < kamper.length; ni++) {
-          if (!kamper[ni].res) { var ntd = parseTid(kamper[ni].tid); if (ntd && ntd > nowT) { nextKampIdx = ni; break; } }
-        }
+      if (!kamper.length) return;
+
+      // Sorter kamper etter tidspunkt
+      kamper.sort(function(a, b) { return (a.tid || '').localeCompare(b.tid || ''); });
+      // Finn neste kamp (første uten resultat med fremtidig tid)
+      var nowT = new Date();
+      var nextKampIdx = -1;
+      for (var ni = 0; ni < kamper.length; ni++) {
+        if (!kamper[ni].res) { var ntd = parseTid(kamper[ni].tid); if (ntd && ntd > nowT) { nextKampIdx = ni; break; } }
+      }
+
+      // Bygg disc→regIdx-kart
+      var discToRegIdx = {};
+      for (var ri2 = 0; ri2 < t.registreringer.length; ri2++) {
+        var rdc = discTilKode(t.registreringer[ri2].disiplin);
+        if (!(rdc in discToRegIdx)) discToRegIdx[rdc] = ri2;
+      }
+
+      // Grupper kamper etter disc
+      var discGroups = {};
+      for (var i = 0; i < kamper.length; i++) {
+        var dc = kamper[i].disc || 'HS';
+        if (!discGroups[dc]) discGroups[dc] = [];
+        discGroups[dc].push(i); // index into sorted kamper
+      }
+
+      // Render inn i riktig reg-slot
+      Object.keys(discGroups).forEach(function(dc) {
+        var regIdx = discToRegIdx[dc];
+        if (regIdx === undefined) return;
+        var kl = document.getElementById('sk-kl-' + t.tournamentId + '-' + regIdx);
+        if (!kl) return;
+        var entries = discGroups[dc];
         var kh = '';
-        var prevDisc = null;
-        for (var i = 0; i < kamper.length; i++) {
-          var k = kamper[i];
-          var ki = i;
-          var dc = k.disc || 'HS';
-          if (dc !== prevDisc) {
-            if (prevDisc !== null) kh += '</div>'; // close previous group
-            // Count only consecutive matches in this group
-            var groupCount = 0;
-            for (var gc = i; gc < kamper.length && (kamper[gc].disc || 'HS') === dc; gc++) groupCount++;
-            kh += '<div class="sk-disc-group"><div class="sk-disc-header">' + (DISC_LABELS[dc] || dc)
-              + '<span class="sk-disc-count">· ' + groupCount + '</span></div>';
-            prevDisc = dc;
-          }
+        for (var j = 0; j < entries.length; j++) {
+          var ki = entries[j];
+          var k = kamper[ki];
           kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + '">'
             + '<span class="sk-kamp-tid">' + formatTid(k.tid) + '</span>'
             + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
@@ -521,52 +535,53 @@ function visTurnering(t) {
             + (k.res ? '<span class="sk-kamp-res">' + k.res + '</span>' : '')
             + '</div>';
         }
-        if (prevDisc !== null) kh += '</div>'; // close last group
         kl.innerHTML = kh;
-        for (var mi = 0; mi < kamper.length; mi++) {
-          (function(kamp, idx) {
-            if (!kamp.mot) return;
-            var regAgeGroup = kamp.ageGroup || '';
-            if (!regAgeGroup) {
-              var discMap2 = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
-              var dFull = discMap2[kamp.disc] || '';
-              for (var ri = 0; ri < t.registreringer.length; ri++) {
-                if (dFull && t.registreringer[ri].disiplin.indexOf(dFull) !== -1) {
-                  regAgeGroup = t.registreringer[ri].ageGroup || ''; break;
-                }
+      });
+
+      // Asynkron ranking for alle kamper
+      for (var mi = 0; mi < kamper.length; mi++) {
+        (function(kamp, idx) {
+          if (!kamp.mot) return;
+          var regAgeGroup = kamp.ageGroup || '';
+          if (!regAgeGroup) {
+            var discMap2 = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
+            var dFull = discMap2[kamp.disc] || '';
+            for (var ri = 0; ri < t.registreringer.length; ri++) {
+              if (dFull && t.registreringer[ri].disiplin.indexOf(dFull) !== -1) {
+                regAgeGroup = t.registreringer[ri].ageGroup || ''; break;
               }
             }
-            // Hent ranking for alle spillere i paret
-            var spillere = kamp.motSpillere && kamp.motSpillere.length
-              ? kamp.motSpillere
-              : [{ navn: kamp.mot, klubb: kamp.motKlubb || '' }];
-            spillere.forEach(function(spiller, si) {
-              (function(sNavn, sKlubb, sIdx) {
-                hentMotstanderRanking(sNavn, kamp.disc, regAgeGroup, sKlubb).then(function(ranking) {
-                  if (!ranking) return;
-                  var motEl;
-                  if (spillere.length > 1) {
-                    motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx + '-p' + sIdx);
-                  } else {
-                    motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
-                  }
-                  if (!motEl) return;
-                  var chip = document.createElement('span');
-                  chip.className = 'sk-rank-mini';
-                  chip.style.marginLeft = '3px';
-                  chip.textContent = '#' + ranking.plass;
-                  if (spillere.length > 1) {
-                    motEl.appendChild(chip); // etter navn i per-spiller span
-                  } else {
-                    var subSpan2 = motEl.querySelector('.sk-kamp-mot-sub');
-                    motEl.insertBefore(chip, subSpan2); // etter navn, før klubb
-                  }
-                });
-              })(spiller.navn, spiller.klubb, si);
-            });
-          })(kamper[mi], mi);
-        }
-      });
+          }
+          var spillere = kamp.motSpillere && kamp.motSpillere.length
+            ? kamp.motSpillere
+            : [{ navn: kamp.mot, klubb: kamp.motKlubb || '' }];
+          spillere.forEach(function(spiller, si) {
+            (function(sNavn, sKlubb, sIdx) {
+              hentMotstanderRanking(sNavn, kamp.disc, regAgeGroup, sKlubb).then(function(ranking) {
+                if (!ranking) return;
+                var motEl;
+                if (spillere.length > 1) {
+                  motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx + '-p' + sIdx);
+                } else {
+                  motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
+                }
+                if (!motEl) return;
+                var chip = document.createElement('span');
+                chip.className = 'sk-rank-mini';
+                chip.style.marginLeft = '3px';
+                chip.textContent = '#' + ranking.plass;
+                if (spillere.length > 1) {
+                  motEl.appendChild(chip);
+                } else {
+                  var subSpan2 = motEl.querySelector('.sk-kamp-mot-sub');
+                  motEl.insertBefore(chip, subSpan2);
+                }
+              });
+            })(spiller.navn, spiller.klubb, si);
+          });
+        })(kamper[mi], mi);
+      }
+    });
   }
 }
 
