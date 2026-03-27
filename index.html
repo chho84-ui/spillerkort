@@ -5,13 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
-<title>🏸 Spillerkort</title>
+<title>Goodminton – Spillerkort</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, Roboto, sans-serif; font-size: 15px; min-height: 100vh; }
-
-  #topbar { background: #16213e; padding: 12px 16px; border-bottom: 2px solid #0f3460; display: flex; align-items: center; gap: 10px; }
-  #topbar h1 { font-size: 18px; color: #e94560; flex: 1; }
 
   #formkort { background: #16213e; padding: 14px 16px; border-bottom: 1px solid #0f3460; display: flex; flex-direction: column; gap: 8px; }
   #formkort label { font-size: 11px; color: #888; display: flex; flex-direction: column; gap: 4px; }
@@ -55,12 +52,23 @@
   .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
   .sk-mot-link { cursor: pointer; }
   .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
+  #topbar { background: #16213e; padding: 14px 16px 10px; border-bottom: 2px solid #0f3460; }
+  #topbar h1 { font-size: 22px; color: #e94560; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 2px; }
+  #topbar .tagline { font-size: 11px; color: #53d8fb; letter-spacing: .04em; }
+  #infoboks { background: #12112a; border-bottom: 1px solid #0f3460; padding: 10px 16px; }
+  #infoboks p { font-size: 12px; color: #888; line-height: 1.6; }
+  #infoboks strong { color: #ccc; }
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <h1>🏸 Spillerkort</h1>
+  <h1>🏸 Goodminton</h1>
+  <div class="tagline">goodminton.no — ditt badminton-spillerkort</div>
+</div>
+
+<div id="infoboks">
+  <p>Søk opp deg selv for å se <strong>ranking</strong> i alle grener, <strong>påmeldinger</strong> til kommende turneringer og <strong>kampprogram</strong> med motstandernes ranking og alder. Trykk på en motstander for å hente opp deres spillerkort.</p>
 </div>
 
 <div id="formkort">
