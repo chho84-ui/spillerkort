@@ -181,9 +181,9 @@ function finnTurneringer() {
       kmap[tid2].navn = tekst.substring(0, 80);
     }
     var tids = Object.keys(kmap);
-    // Filtrer ut turneringer der dato er mer enn 5 dager gammel
-    // (5 dagers buffer fordi 'dato' kan være påmeldingsfristen, ikke turneringsdatoen)
-    var cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - 5);
+    // Filtrer ut turneringer der dato er mer enn 21 dager gammel
+    // ('dato' er påmeldingsfristen, ikke turneringsdatoen - kan være 2-3 uker før)
+    var cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - 21);
     tids = tids.filter(function(tid) {
       var dato = kmap[tid].dato; // "dd.MM.yyyy"
       if (!dato) return true;
