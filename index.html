@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="no">
 <head>
 <meta charset="UTF-8">
@@ -38,11 +38,13 @@
   .sk-makker { font-size: 11px; color: #888; }
   .sk-btn { display: block; text-align: center; background: #e94560; color: #fff; text-decoration: none; padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 12px; font-weight: bold; }
   .sk-kamplist { margin-top: 8px; border-top: 1px solid #0f3460; padding-top: 6px; }
-  .sk-kamp { display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid #0a0a20; font-size: 12px; align-items: center; }
-  .sk-kamp-tid { color: #53d8fb; font-weight: bold; min-width: 48px; }
-  .sk-kamp-bane { color: #888; min-width: 32px; }
-  .sk-kamp-disc { color: #aaa; min-width: 28px; font-size: 10px; }
+  .sk-disc-group { margin-bottom: 6px; }
+  .sk-disc-header { font-size: 10px; font-weight: bold; color: #53d8fb; text-transform: uppercase; letter-spacing: .06em; padding: 4px 0 2px; border-bottom: 1px solid #1a2a4a; margin-bottom: 2px; }
+  .sk-kamp { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #0a0a20; font-size: 12px; align-items: flex-start; }
+  .sk-kamp-tid { color: #53d8fb; font-weight: bold; min-width: 50px; padding-top: 1px; }
+  .sk-kamp-bane { color: #888; min-width: 28px; padding-top: 1px; }
   .sk-kamp-mot { flex: 1; color: #e0e0e0; }
+  .sk-kamp-mot-sub { display: block; font-size: 10px; color: #888; }
   .sk-kamp-res { color: #7fffd4; min-width: 50px; text-align: right; }
   .sk-rank-mini { font-size: 9px; background: #0f3460; color: #e94560; padding: 1px 4px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
 </style>
@@ -435,29 +437,57 @@ function visTurnering(t) {
         kl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center">Program ikke publisert ennå</div>';
         return;
       }
-        var kh = '';
+        // Gruppe kamper etter disiplin
+        var DISC_LABELS = { HS: 'Herresingle', DS: 'Damesingle', HD: 'Herredouble', DD: 'Damedouble', MD: 'Mixed double' };
+        var DISC_ORDER = ['HS','DS','MD','HD','DD'];
+        var grouped = {};
         for (var i = 0; i < kamper.length; i++) {
-          var k = kamper[i];
-          kh += '<div class="sk-kamp">'
-            + '<span class="sk-kamp-tid">' + (k.tid || '--:--') + '</span>'
-            + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
-            + '<span class="sk-kamp-disc">' + (k.disc || '') + '</span>'
-            + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + i + '">' + (k.mot || '') + '</span>'
-            + (k.res ? '<span class="sk-kamp-res">' + k.res + '</span>' : '')
-            + '</div>';
+          var dc = kamper[i].disc || 'HS';
+          if (!grouped[dc]) grouped[dc] = [];
+          grouped[dc].push({ kamp: kamper[i], idx: i });
+        }
+        var kh = '';
+        for (var di = 0; di < DISC_ORDER.length; di++) {
+          var dc2 = DISC_ORDER[di];
+          if (!grouped[dc2]) continue;
+          kh += '<div class="sk-disc-group"><div class="sk-disc-header">' + (DISC_LABELS[dc2] || dc2) + '</div>';
+          for (var gi = 0; gi < grouped[dc2].length; gi++) {
+            var k = grouped[dc2][gi].kamp;
+            var ki = grouped[dc2][gi].idx;
+            kh += '<div class="sk-kamp">'
+              + '<span class="sk-kamp-tid">' + (k.tid || '--:--') + '</span>'
+              + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
+              + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
+              + (k.mot || '')
+              + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + k.motKlubb + '</span>' : '')
+              + '</span>'
+              + (k.res ? '<span class="sk-kamp-res">' + k.res + '</span>' : '')
+              + '</div>';
+          }
+          kh += '</div>';
         }
         kl.innerHTML = kh;
         for (var mi = 0; mi < kamper.length; mi++) {
           (function(kamp, idx) {
             if (!kamp.mot) return;
-            hentMotstanderRanking(kamp.mot, kamp.disc).then(function(ranking) {
+            var regAgeGroup = kamp.ageGroup || '';
+            if (!regAgeGroup) {
+              var discMap2 = {HS:'Herresingle',DS:'Damesingle',HD:'Herredouble',DD:'Damedouble',MD:'Mixed'};
+              var dFull = discMap2[kamp.disc] || '';
+              for (var ri = 0; ri < t.registreringer.length; ri++) {
+                if (dFull && t.registreringer[ri].disiplin.indexOf(dFull) !== -1) {
+                  regAgeGroup = t.registreringer[ri].ageGroup || ''; break;
+                }
+              }
+            }
+            hentMotstanderRanking(kamp.mot, kamp.disc, regAgeGroup).then(function(ranking) {
               if (!ranking) return;
               var motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
-              if (!motEl) return;
+                    if (!motEl) return;
               var chip = document.createElement('span');
               chip.className = 'sk-rank-mini';
               chip.textContent = '#' + ranking.plass;
-              motEl.appendChild(chip);
+              motEl.insertBefore(chip, motEl.firstChild);
             });
           })(kamper[mi], mi);
         }
