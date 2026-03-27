@@ -181,14 +181,15 @@ function finnTurneringer() {
       kmap[tid2].navn = tekst.substring(0, 80);
     }
     var tids = Object.keys(kmap);
-    // Filtrer ut turneringer som allerede er ferdig (dato < i dag)
-    var today = new Date(); today.setHours(0,0,0,0);
+    // Filtrer ut turneringer der dato er mer enn 5 dager gammel
+    // (5 dagers buffer fordi 'dato' kan være påmeldingsfristen, ikke turneringsdatoen)
+    var cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - 5);
     tids = tids.filter(function(tid) {
       var dato = kmap[tid].dato; // "dd.MM.yyyy"
       if (!dato) return true;
       var parts = dato.split('.');
       var d = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
-      return d >= today;
+      return d >= cutoff;
     });
     sett('Sjekker ' + tids.length + ' turneringer...');
 
