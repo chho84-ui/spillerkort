@@ -454,43 +454,39 @@ function visTurnering(t) {
         kl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center">Program ikke publisert ennå</div>';
         return;
       }
-        // Gruppe kamper etter disiplin
+        // Sorter kamper etter tidspunkt
         var DISC_LABELS = { HS: 'Herresingle', DS: 'Damesingle', HD: 'Herredouble', DD: 'Damedouble', MD: 'Mixed double' };
-        var DISC_ORDER = ['HS','DS','MD','HD','DD'];
-        var grouped = {};
-        for (var i = 0; i < kamper.length; i++) {
-          var dc = kamper[i].disc || 'HS';
-          if (!grouped[dc]) grouped[dc] = [];
-          grouped[dc].push({ kamp: kamper[i], idx: i });
-        }
+        kamper.sort(function(a, b) { return (a.tid || '').localeCompare(b.tid || ''); });
         var kh = '';
-        for (var di = 0; di < DISC_ORDER.length; di++) {
-          var dc2 = DISC_ORDER[di];
-          if (!grouped[dc2]) continue;
-          kh += '<div class="sk-disc-group"><div class="sk-disc-header">' + (DISC_LABELS[dc2] || dc2) + '</div>';
-          for (var gi = 0; gi < grouped[dc2].length; gi++) {
-            var k = grouped[dc2][gi].kamp;
-            var ki = grouped[dc2][gi].idx;
-            kh += '<div class="sk-kamp">'
-              + '<span class="sk-kamp-tid">' + (k.tid || '--:--') + '</span>'
-              + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
-              + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
-              + (function() {
-                  var spillere = k.motSpillere && k.motSpillere.length > 1 ? k.motSpillere : null;
-                  if (spillere) {
-                    return spillere.map(function(s, si) {
-                      return '<span id="sk-mot-' + t.tournamentId + '-' + ki + '-p' + si + '">' + s.navn + '</span>';
-                    }).join(' / ');
-                  }
-                  return k.mot || '';
-                })()
-              + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + k.motKlubb + '</span>' : '')
-              + '</span>'
-              + (k.res ? '<span class="sk-kamp-res">' + k.res + '</span>' : '')
-              + '</div>';
+        var prevDisc = null;
+        for (var i = 0; i < kamper.length; i++) {
+          var k = kamper[i];
+          var ki = i;
+          var dc = k.disc || 'HS';
+          if (dc !== prevDisc) {
+            if (prevDisc !== null) kh += '</div>'; // close previous group
+            kh += '<div class="sk-disc-group"><div class="sk-disc-header">' + (DISC_LABELS[dc] || dc) + '</div>';
+            prevDisc = dc;
           }
-          kh += '</div>';
+          kh += '<div class="sk-kamp">'
+            + '<span class="sk-kamp-tid">' + (k.tid || '--:--') + '</span>'
+            + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
+            + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
+            + (function(kp, kpi) {
+                var spillere = kp.motSpillere && kp.motSpillere.length > 1 ? kp.motSpillere : null;
+                if (spillere) {
+                  return spillere.map(function(s, si) {
+                    return '<span id="sk-mot-' + t.tournamentId + '-' + kpi + '-p' + si + '">' + s.navn + '</span>';
+                  }).join(' / ');
+                }
+                return kp.mot || '';
+              })(k, ki)
+            + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + k.motKlubb + '</span>' : '')
+            + '</span>'
+            + (k.res ? '<span class="sk-kamp-res">' + k.res + '</span>' : '')
+            + '</div>';
         }
+        if (prevDisc !== null) kh += '</div>'; // close last group
         kl.innerHTML = kh;
         for (var mi = 0; mi < kamper.length; mi++) {
           (function(kamp, idx) {
