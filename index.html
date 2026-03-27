@@ -473,7 +473,15 @@ function visTurnering(t) {
               + '<span class="sk-kamp-tid">' + (k.tid || '--:--') + '</span>'
               + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
               + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
-              + (k.mot || '')
+              + (function() {
+                  var spillere = k.motSpillere && k.motSpillere.length > 1 ? k.motSpillere : null;
+                  if (spillere) {
+                    return spillere.map(function(s, si) {
+                      return '<span id="sk-mot-' + t.tournamentId + '-' + ki + '-p' + si + '">' + s.navn + '</span>';
+                    }).join(' / ');
+                  }
+                  return k.mot || '';
+                })()
               + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + k.motKlubb + '</span>' : '')
               + '</span>'
               + (k.res ? '<span class="sk-kamp-res">' + k.res + '</span>' : '')
@@ -495,19 +503,33 @@ function visTurnering(t) {
                 }
               }
             }
-            // For dobbel: søk på første spiller ("A / B" → "A")
-            var motNavn = (kamp.mot || '').split(' / ')[0].trim();
-            var motKlubb2 = (kamp.motKlubb || '').split(' / ')[0].trim();
-            hentMotstanderRanking(motNavn, kamp.disc, regAgeGroup, motKlubb2).then(function(ranking) {
-              if (!ranking) return;
-              var motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
-              if (!motEl) return;
-              var chip = document.createElement('span');
-              chip.className = 'sk-rank-mini';
-              chip.style.marginLeft = '4px';
-              chip.textContent = '#' + ranking.plass;
-              var subSpan = motEl.querySelector('.sk-kamp-mot-sub');
-              motEl.insertBefore(chip, subSpan);
+            // Hent ranking for alle spillere i paret
+            var spillere = kamp.motSpillere && kamp.motSpillere.length
+              ? kamp.motSpillere
+              : [{ navn: kamp.mot, klubb: kamp.motKlubb || '' }];
+            spillere.forEach(function(spiller, si) {
+              (function(sNavn, sKlubb, sIdx) {
+                hentMotstanderRanking(sNavn, kamp.disc, regAgeGroup, sKlubb).then(function(ranking) {
+                  if (!ranking) return;
+                  var motEl;
+                  if (spillere.length > 1) {
+                    motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx + '-p' + sIdx);
+                  } else {
+                    motEl = document.getElementById('sk-mot-' + t.tournamentId + '-' + idx);
+                  }
+                  if (!motEl) return;
+                  var chip = document.createElement('span');
+                  chip.className = 'sk-rank-mini';
+                  chip.style.marginLeft = '3px';
+                  chip.textContent = '#' + ranking.plass;
+                  if (spillere.length > 1) {
+                    motEl.appendChild(chip); // etter navn i per-spiller span
+                  } else {
+                    var subSpan2 = motEl.querySelector('.sk-kamp-mot-sub');
+                    motEl.insertBefore(chip, subSpan2); // etter navn, før klubb
+                  }
+                });
+              })(spiller.navn, spiller.klubb, si);
             });
           })(kamper[mi], mi);
         }
