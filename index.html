@@ -52,6 +52,19 @@
   .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
   .sk-mot-link { cursor: pointer; }
   .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
+  .sk-gruppe-btn { display: block; width: 100%; background: #0a1628; border: 1px solid #0f3460; color: #53d8fb; border-radius: 6px; padding: 7px; font-size: 12px; font-weight: bold; cursor: pointer; margin-top: 6px; letter-spacing: .03em; text-align: center; }
+  .sk-gruppe-btn:active { background: #0f3460; }
+  .sk-gruppe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 200; display: flex; align-items: flex-end; justify-content: center; }
+  .sk-gruppe-panel { background: #16213e; border-top: 2px solid #53d8fb; border-radius: 12px 12px 0 0; width: 100%; max-width: 480px; padding: 16px; max-height: 70vh; overflow-y: auto; }
+  .sk-gruppe-hdr { display: flex; align-items: center; margin-bottom: 12px; }
+  .sk-gruppe-tittel { font-size: 13px; font-weight: bold; color: #53d8fb; flex: 1; }
+  .sk-gruppe-xbtn { background: none; border: none; color: #888; font-size: 20px; cursor: pointer; line-height: 1; }
+  .sk-gruppe-tabell { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .sk-gruppe-tabell th { color: #888; font-size: 10px; text-align: left; padding: 3px 4px; border-bottom: 1px solid #0f3460; }
+  .sk-gruppe-tabell td { padding: 5px 4px; border-bottom: 1px solid #0a0a20; color: #ccc; }
+  .sk-gruppe-tabell tr.meg td { background: rgba(83,216,251,.08); color: #53d8fb; font-weight: bold; }
+  .sk-gruppe-tabell .pos { color: #555; width: 20px; }
+  .sk-gruppe-tabell .score { color: #7fffd4; text-align: right; white-space: nowrap; }
   #topbar { background: #16213e; padding: 14px 16px 10px; border-bottom: 2px solid #0f3460; }
   #topbar h1 { font-size: 22px; color: #e94560; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 2px; }
   #topbar .tagline { font-size: 11px; color: #53d8fb; letter-spacing: .04em; }
@@ -570,6 +583,18 @@ function visTurnering(t) {
             + '</div>';
         }
         kl.innerHTML = kh;
+        // Vis gruppe-knapp hvis vi har gruppedata for denne disiplinen
+        if (data.grupper && data.grupper.length) {
+          var g = null;
+          for (var gi = 0; gi < data.grupper.length; gi++) { if (data.grupper[gi].disc === dc) { g = data.grupper[gi]; break; } }
+          if (g) {
+            var gruppeBtn = document.createElement('button');
+            gruppeBtn.className = 'sk-gruppe-btn';
+            gruppeBtn.textContent = '\uD83D\uDCCA Vis gruppe (' + g.spillere.length + ' spillere)';
+            (function(gData) { gruppeBtn.onclick = function() { visGruppe(gData); }; })(g);
+            kl.parentNode.insertBefore(gruppeBtn, kl.nextSibling);
+          }
+        }
       });
 
       // Asynkron ranking for alle kamper
@@ -642,6 +667,36 @@ function parseKamper(html) {
     if (tid || mot) kamper.push({ tid: tid, bane: bane, disc: disc, mot: mot, res: res });
   }
   return kamper;
+}
+
+function visGruppe(g) {
+  var rows = g.spillere.map(function(s) {
+    return '<tr class="' + (s.erMeg ? 'meg' : '') + '">'
+      + '<td class="pos">' + s.pos + '</td>'
+      + '<td>' + s.navn + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + s.klubb + '</span>' : '') + '</td>'
+      + '<td class="score">' + s.kV + '-' + s.kT + '</td>'
+      + '<td class="score">' + s.sV + '-' + s.sT + '</td>'
+      + '</tr>';
+  }).join('');
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-gruppe-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkGruppe(); };
+  overlay.innerHTML = '<div class="sk-gruppe-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">' + g.disc + ' ' + g.ageGroup + ' \u2014 Gruppestilling</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkGruppe()">\u2715</button>'
+    + '</div>'
+    + '<table class="sk-gruppe-tabell">'
+    + '<thead><tr><th>#</th><th>Spiller</th><th>Kamp</th><th>Sett</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table></div>';
+  document.body.appendChild(overlay);
+}
+
+function lukkGruppe() {
+  var el = document.getElementById('sk-gruppe-overlay');
+  if (el) el.remove();
 }
 
 function aapneMotstander(navn, klubb) {
