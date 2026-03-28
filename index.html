@@ -535,18 +535,16 @@ function visTurnering(t) {
         if (klc) klc.innerHTML = '';
       }
       if (!kamper.length) {
-        // Kampprogram ikke klart ennå — vis varsle-knapp per registrering
-        for (var vi = 0; vi < t.registreringer.length; vi++) {
-          var vkl = document.getElementById('sk-kl-' + t.tournamentId + '-' + vi);
-          if (vkl) {
-            var vBtn = document.createElement('button');
-            vBtn.className = 'sk-varsle-btn';
-            vBtn.textContent = '\uD83D\uDD14 Varsle meg når programmet er klart';
-            (function(tnavn, tcup2000Url, container) {
-              vBtn.onclick = function() { visVarsleSkjema(tnavn, tcup2000Url, container); };
-            })(t.navn, t.cup2000Url || '', vkl);
-            vkl.appendChild(vBtn);
-          }
+        // Én varsle-knapp per turnering — legg i første kamplist-container
+        var vkl = document.getElementById('sk-kl-' + t.tournamentId + '-0');
+        if (vkl) {
+          var vBtn = document.createElement('button');
+          vBtn.className = 'sk-varsle-btn';
+          vBtn.textContent = '\uD83D\uDD14 Varsle meg når programmet er klart';
+          (function(tnavn, tcup2000Url, container) {
+            vBtn.onclick = function() { visVarsleSkjema(tnavn, tcup2000Url, container); };
+          })(t.navn, t.cup2000Url || '', vkl);
+          vkl.appendChild(vBtn);
         }
         return;
       }
