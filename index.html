@@ -199,8 +199,10 @@ function hentRanking() {
 
 function finnTurneringer() {
   var now = new Date();
-  var dd = String(now.getDate()).padStart(2, '0');
-  var mm = String(now.getMonth() + 1).padStart(2, '0');
+  var fraDate = new Date(now);
+  fraDate.setDate(fraDate.getDate() - 28);
+  var dd = String(fraDate.getDate()).padStart(2, '0');
+  var mm = String(fraDate.getMonth() + 1).padStart(2, '0');
   var yyyy = now.getFullYear();
   var fra = dd + '.' + mm + '.' + yyyy;
 
