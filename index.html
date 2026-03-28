@@ -162,14 +162,14 @@ function appApi(data) {
   }).then(function(r) { return r.json(); });
 }
 
-function cup2000Api(tournamentNavn) {
+function cup2000Api(tournamentNavn, cup2000Url) {
   var key = 'cup2000:' + tournamentNavn + '|' + SN;
   var hit = cacheGet(key);
   if (hit !== undefined) return Promise.resolve(hit);
   return fetch(PROXY + '/cup2000', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK })
+    body: JSON.stringify({ tournamentNavn: tournamentNavn, cup2000Url: cup2000Url || '', navn: SN, klubb: SK })
   }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
 }
 
@@ -528,7 +528,7 @@ function visTurnering(t) {
   }
 
   if (true) {
-    cup2000Api(t.navn).then(function(data) {
+    cup2000Api(t.navn, t.cup2000Url).then(function(data) {
       var kamper = data && data.kamper ? data.kamper : (data && data.html ? parseKamper(data.html) : []);
       // Clear loading placeholders
       for (var ci = 0; ci < t.registreringer.length; ci++) {
@@ -601,7 +601,8 @@ function visTurnering(t) {
           liveBtn.className = 'sk-live-btn';
           liveBtn.innerHTML = '\uD83D\uDD34 Live kampvisning';
           var tnavn = t.navn;
-          liveBtn.onclick = function() { aapneLive(tnavn); };
+          var tcup2000Url = t.cup2000Url || '';
+          liveBtn.onclick = function() { aapneLive(tnavn, tcup2000Url); };
           kl.parentNode.insertBefore(liveBtn, kl.nextSibling);
         }
       });
@@ -678,7 +679,7 @@ function parseKamper(html) {
   return kamper;
 }
 
-function aapneLive(tournamentNavn) {
+function aapneLive(tournamentNavn, cup2000Url) {
   var overlay = document.createElement('div');
   overlay.className = 'sk-live-overlay';
   overlay.id = 'sk-live-overlay';
@@ -691,6 +692,7 @@ function aapneLive(tournamentNavn) {
     + '<div class="sk-live-scroll" id="sk-live-content"><div class="sk-status">Laster...</div></div>';
   document.body.appendChild(overlay);
   window._liveTournamentNavn = tournamentNavn;
+  window._liveCup2000Url = cup2000Url || '';
   oppdaterLive();
 }
 
@@ -720,7 +722,7 @@ function oppdaterLive() {
   fetch(PROXY + '/cup2000live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK })
+    body: JSON.stringify({ tournamentNavn: tournamentNavn, cup2000Url: window._liveCup2000Url || '', navn: SN, klubb: SK })
   }).then(function(r) { return r.json(); }).then(function(data) {
     var kamper = data.kamper || [];
     if (!kamper.length) { content.innerHTML = '<div class="sk-status">Ingen kamper funnet</div>'; return; }
