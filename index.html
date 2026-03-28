@@ -52,6 +52,28 @@
   .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
   .sk-mot-link { cursor: pointer; }
   .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
+  .sk-live-btn { display: block; width: 100%; background: #1a0a10; border: 1px solid #e94560; color: #e94560; border-radius: 6px; padding: 7px; font-size: 12px; font-weight: bold; cursor: pointer; margin-top: 6px; letter-spacing: .03em; }
+  .sk-live-btn:active { background: #2a0a15; }
+  .sk-live-overlay { position: fixed; inset: 0; background: #1a1a2e; z-index: 200; display: flex; flex-direction: column; overflow: hidden; }
+  .sk-live-topbar { background: #16213e; padding: 12px 16px; border-bottom: 2px solid #e94560; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .sk-live-dot { width: 8px; height: 8px; background: #e94560; border-radius: 50%; animation: livepulse 1.2s infinite; flex-shrink: 0; }
+  @keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .sk-live-title { font-size: 14px; font-weight: bold; color: #e94560; flex: 1; }
+  .sk-live-rbtn { background: #0f3460; border: none; color: #ccc; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; margin-right: 6px; }
+  .sk-live-rbtn:active { background: #1a4a80; }
+  .sk-live-xbtn { background: none; border: none; color: #888; font-size: 20px; cursor: pointer; line-height: 1; }
+  .sk-live-scroll { flex: 1; overflow-y: auto; padding: 10px 12px; }
+  .sk-live-sec { margin-bottom: 14px; }
+  .sk-live-sech { font-size: 10px; font-weight: bold; color: #53d8fb; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 1px solid #1a2a4a; }
+  .sk-live-banerow { font-size: 10px; color: #444; margin: 5px 0 2px; font-weight: bold; }
+  .sk-live-match { display: flex; gap: 5px; padding: 4px 2px; border-bottom: 1px solid #0a0a20; font-size: 12px; align-items: center; }
+  .sk-live-match.mine { background: rgba(233,69,96,.09); border-left: 2px solid #e94560; padding-left: 4px; border-radius: 0 4px 4px 0; }
+  .sk-live-tid { color: #53d8fb; min-width: 44px; font-size: 11px; font-weight: bold; flex-shrink: 0; }
+  .sk-live-disc { color: #555; font-size: 10px; min-width: 26px; flex-shrink: 0; }
+  .sk-live-players { flex: 1; color: #ccc; }
+  .sk-live-vs { color: #444; font-size: 10px; margin: 0 3px; }
+  .sk-live-score { font-weight: bold; color: #7fffd4; min-width: 36px; text-align: right; font-size: 12px; flex-shrink: 0; }
+  .sk-live-noscore { min-width: 36px; }
   #topbar { background: #16213e; padding: 14px 16px 10px; border-bottom: 2px solid #0f3460; }
   #topbar h1 { font-size: 22px; color: #e94560; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 2px; }
   #topbar .tagline { font-size: 11px; color: #53d8fb; letter-spacing: .04em; }
@@ -568,6 +590,18 @@ function visTurnering(t) {
             + '</div>';
         }
         kl.innerHTML = kh;
+        // Vis Live-knapp hvis noen kamper er i dag
+        var idag = new Date();
+        var todayStr = String(idag.getDate()).padStart(2,'0') + '-' + String(idag.getMonth()+1).padStart(2,'0');
+        var harIDag = kamper.some(function(k) { return (k.tid || '').startsWith(todayStr); });
+        if (harIDag) {
+          var liveBtn = document.createElement('button');
+          liveBtn.className = 'sk-live-btn';
+          liveBtn.innerHTML = '\uD83D\uDD34 Live kampvisning';
+          var tnavn = t.navn;
+          liveBtn.onclick = function() { aapneLive(tnavn); };
+          kl.parentNode.insertBefore(liveBtn, kl.nextSibling);
+        }
       });
 
       // Asynkron ranking for alle kamper
@@ -640,6 +674,78 @@ function parseKamper(html) {
     if (tid || mot) kamper.push({ tid: tid, bane: bane, disc: disc, mot: mot, res: res });
   }
   return kamper;
+}
+
+function aapneLive(tournamentNavn) {
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-live-overlay';
+  overlay.id = 'sk-live-overlay';
+  overlay.innerHTML = '<div class="sk-live-topbar">'
+    + '<div class="sk-live-dot"></div>'
+    + '<span class="sk-live-title">LIVE</span>'
+    + '<button class="sk-live-rbtn" onclick="oppdaterLive()">\uD83D\uDD04 Oppdater</button>'
+    + '<button class="sk-live-xbtn" onclick="lukkLive()">\u2715</button>'
+    + '</div>'
+    + '<div class="sk-live-scroll" id="sk-live-content"><div class="sk-status">Laster...</div></div>';
+  document.body.appendChild(overlay);
+  window._liveTournamentNavn = tournamentNavn;
+  oppdaterLive();
+}
+
+function lukkLive() {
+  var el = document.getElementById('sk-live-overlay');
+  if (el) el.remove();
+}
+
+function renderLiveMatch(k, forceMine) {
+  var mine = forceMine || k.mine;
+  var p1 = (k.spiller1 || []).map(function(s){ return s.navn; }).join(' / ') || '?';
+  var p2 = (k.spiller2 || []).map(function(s){ return s.navn; }).join(' / ') || '?';
+  var score = (k.res1 !== '' && k.res2 !== '') ? (k.res1 + '-' + k.res2) : '';
+  return '<div class="sk-live-match' + (mine ? ' mine' : '') + '">'
+    + '<span class="sk-live-tid">' + formatTid(k.tid) + '</span>'
+    + '<span class="sk-live-disc">' + (k.disc || '') + '</span>'
+    + '<span class="sk-live-players">' + p1 + '<span class="sk-live-vs">vs</span>' + p2 + '</span>'
+    + (score ? '<span class="sk-live-score">' + score + '</span>' : '<span class="sk-live-noscore"></span>')
+    + '</div>';
+}
+
+function oppdaterLive() {
+  var content = document.getElementById('sk-live-content');
+  if (!content) return;
+  var tournamentNavn = window._liveTournamentNavn;
+  content.innerHTML = '<div class="sk-status">Laster...</div>';
+  fetch(PROXY + '/cup2000live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    var kamper = data.kamper || [];
+    if (!kamper.length) { content.innerHTML = '<div class="sk-status">Ingen kamper funnet</div>'; return; }
+    var mine = kamper.filter(function(k) { return k.mine; });
+    var andre = kamper.filter(function(k) { return !k.mine; });
+    var html = '';
+    if (mine.length) {
+      html += '<div class="sk-live-sec"><div class="sk-live-sech">Mine kamper (' + mine.length + ')</div>';
+      mine.forEach(function(k) { html += renderLiveMatch(k, true); });
+      html += '</div>';
+    }
+    // Grupper andre etter bane
+    var byBane = {};
+    andre.forEach(function(k) { var b = k.bane || '?'; if (!byBane[b]) byBane[b] = []; byBane[b].push(k); });
+    var baner = Object.keys(byBane).sort(function(a,b) { return (parseInt(a)||0)-(parseInt(b)||0) || a.localeCompare(b); });
+    if (baner.length) {
+      html += '<div class="sk-live-sec"><div class="sk-live-sech">Alle kamper (' + andre.length + ')</div>';
+      baner.forEach(function(bane) {
+        html += '<div class="sk-live-banerow">Bane ' + bane + '</div>';
+        byBane[bane].forEach(function(k) { html += renderLiveMatch(k, false); });
+      });
+      html += '</div>';
+    }
+    content.innerHTML = html;
+  }).catch(function(e) {
+    content.innerHTML = '<div class="sk-status">Feil: ' + e.message + '</div>';
+  });
 }
 
 function aapneMotstander(navn, klubb) {
