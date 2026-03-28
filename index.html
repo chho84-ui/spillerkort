@@ -52,6 +52,10 @@
   .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
   .sk-mot-link { cursor: pointer; }
   .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
+  .sk-sek-banner { display: flex; align-items: center; margin-bottom: 8px; }
+  .sk-sek-banner h3 { flex: 1; margin: 0; }
+  .sk-varsle-mini { background: none; border: 1px solid #333; color: #555; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; white-space: nowrap; margin-left: 6px; flex-shrink: 0; }
+  .sk-varsle-mini:hover { border-color: #e94560; color: #e94560; }
   .sk-varsle-btn { display: block; width: 100%; background: #0a1628; border: 1px solid #0f3460; color: #aaa; border-radius: 6px; padding: 7px; font-size: 12px; cursor: pointer; margin-top: 6px; text-align: center; }
   .sk-varsle-btn:active { background: #0f3460; }
   .sk-varsle-form { background: #0a1220; border: 1px solid #0f3460; border-radius: 6px; padding: 10px; margin-top: 6px; }
@@ -473,7 +477,7 @@ function visTurnering(t) {
   var res = document.getElementById('resultat');
   var sec = document.createElement('div');
   sec.className = 'sk-sek';
-  sec.innerHTML = '<h3>' + (t.dato || '') + ' ' + (t.navn || 'Turnering') + '</h3>';
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + (t.dato || '') + ' ' + (t.navn || 'Turnering') + '</h3></div>';
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
@@ -536,12 +540,13 @@ function visTurnering(t) {
       }
       if (!kamper.length) {
         var vBtn = document.createElement('button');
-        vBtn.className = 'sk-varsle-btn';
-        vBtn.textContent = '\uD83D\uDD14 Varsle meg når programmet er klart';
+        vBtn.className = 'sk-varsle-mini';
+        vBtn.textContent = '\uD83D\uDD14 Varsle meg';
         (function(tnavn, tcup2000Url) {
           vBtn.onclick = function() { visVarsleSkjema(tnavn, tcup2000Url, sec); };
         })(t.navn, t.cup2000Url || '');
-        sec.appendChild(vBtn);
+        var banner = sec.querySelector('.sk-sek-banner');
+        if (banner) banner.appendChild(vBtn);
         return;
       }
 
@@ -695,7 +700,7 @@ function visVarsleSkjema(tournamentNavn, cup2000Url, container) {
     + '<input type="email" id="sk-varsle-epost" placeholder="din@epost.no" value="' + lagretEpost.replace(/"/g, '') + '">'
     + '<button class="sk-varsle-send" onclick="sendVarsel(this,\'' + tournamentNavn.replace(/'/g, "\\'") + '\',\'' + (cup2000Url||'').replace(/'/g, "\\'") + '\')">Send varsel</button>';
   // Fjern eksisterende varsle-knapper i denne containeren
-  var existing = container.querySelectorAll('.sk-varsle-btn, .sk-varsle-form');
+  var existing = container.querySelectorAll('.sk-varsle-btn, .sk-varsle-mini, .sk-varsle-form');
   existing.forEach(function(el) { el.remove(); });
   container.appendChild(form);
   var inp = document.getElementById('sk-varsle-epost');
