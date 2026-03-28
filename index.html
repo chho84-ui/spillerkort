@@ -52,6 +52,14 @@
   .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
   .sk-mot-link { cursor: pointer; }
   .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
+  .sk-varsle-btn { display: block; width: 100%; background: #0a1628; border: 1px solid #0f3460; color: #aaa; border-radius: 6px; padding: 7px; font-size: 12px; cursor: pointer; margin-top: 6px; text-align: center; }
+  .sk-varsle-btn:active { background: #0f3460; }
+  .sk-varsle-form { background: #0a1220; border: 1px solid #0f3460; border-radius: 6px; padding: 10px; margin-top: 6px; }
+  .sk-varsle-form input { width: 100%; background: #0a0a1e; border: 1px solid #0f3460; border-radius: 6px; color: #e0e0e0; padding: 7px 9px; font-size: 13px; margin: 6px 0; }
+  .sk-varsle-form input:focus { outline: none; border-color: #53d8fb; }
+  .sk-varsle-send { width: 100%; background: #e94560; color: #fff; border: none; border-radius: 6px; padding: 8px; font-size: 13px; font-weight: bold; cursor: pointer; margin-top: 2px; }
+  .sk-varsle-send:active { background: #c73450; }
+  .sk-varsle-send:disabled { background: #555; cursor: default; }
   .sk-gruppe-btn { display: block; width: 100%; background: #0a1628; border: 1px solid #0f3460; color: #53d8fb; border-radius: 6px; padding: 7px; font-size: 12px; font-weight: bold; cursor: pointer; margin-top: 6px; letter-spacing: .03em; text-align: center; }
   .sk-gruppe-btn:active { background: #0f3460; }
   .sk-gruppe-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 200; display: flex; align-items: flex-end; justify-content: center; }
@@ -526,7 +534,22 @@ function visTurnering(t) {
         var klc = document.getElementById('sk-kl-' + t.tournamentId + '-' + ci);
         if (klc) klc.innerHTML = '';
       }
-      if (!kamper.length) return;
+      if (!kamper.length) {
+        // Kampprogram ikke klart ennå — vis varsle-knapp per registrering
+        for (var vi = 0; vi < t.registreringer.length; vi++) {
+          var vkl = document.getElementById('sk-kl-' + t.tournamentId + '-' + vi);
+          if (vkl) {
+            var vBtn = document.createElement('button');
+            vBtn.className = 'sk-varsle-btn';
+            vBtn.textContent = '\uD83D\uDD14 Varsle meg når programmet er klart';
+            (function(tnavn, tcup2000Url, container) {
+              vBtn.onclick = function() { visVarsleSkjema(tnavn, tcup2000Url, container); };
+            })(t.navn, t.cup2000Url || '', vkl);
+            vkl.appendChild(vBtn);
+          }
+        }
+        return;
+      }
 
       // Sorter kamper etter tidspunkt
       kamper.sort(function(a, b) { return (a.tid || '').localeCompare(b.tid || ''); });
@@ -667,6 +690,45 @@ function parseKamper(html) {
     if (tid || mot) kamper.push({ tid: tid, bane: bane, disc: disc, mot: mot, res: res });
   }
   return kamper;
+}
+
+function visVarsleSkjema(tournamentNavn, cup2000Url, container) {
+  // Bytt ut knappen med inline-skjema
+  var lagretEpost = localStorage.getItem('sk_epost') || '';
+  var form = document.createElement('div');
+  form.className = 'sk-varsle-form';
+  form.innerHTML = '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Få e-post når kampprogram er tilgjengelig</div>'
+    + '<input type="email" id="sk-varsle-epost" placeholder="din@epost.no" value="' + lagretEpost.replace(/"/g, '') + '">'
+    + '<button class="sk-varsle-send" onclick="sendVarsel(this,\'' + tournamentNavn.replace(/'/g, "\\'") + '\',\'' + (cup2000Url||'').replace(/'/g, "\\'") + '\')">Send varsel</button>';
+  // Fjern eksisterende varsle-knapper i denne containeren
+  var existing = container.querySelectorAll('.sk-varsle-btn, .sk-varsle-form');
+  existing.forEach(function(el) { el.remove(); });
+  container.appendChild(form);
+  var inp = document.getElementById('sk-varsle-epost');
+  if (inp) inp.focus();
+}
+
+function sendVarsel(btn, tournamentNavn, cup2000Url) {
+  var inp = document.getElementById('sk-varsle-epost');
+  var email = inp ? inp.value.trim() : '';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    inp && (inp.style.borderColor = '#e94560');
+    return;
+  }
+  localStorage.setItem('sk_epost', email);
+  btn.disabled = true;
+  btn.textContent = 'Sender...';
+  fetch(PROXY + '/varsle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, tournamentNavn: tournamentNavn, cup2000Url: cup2000Url || '', navn: SN, klubb: SK })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    var form = btn.closest('.sk-varsle-form');
+    if (form) form.innerHTML = '<div style="font-size:12px;color:#7fffd4;padding:4px 0">\u2713 Vi varsler ' + email + ' når programmet er klart!</div>';
+  }).catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Send varsel';
+  });
 }
 
 function visGruppe(g) {
