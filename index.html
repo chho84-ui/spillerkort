@@ -91,6 +91,16 @@ var PROXY = 'https://spillerkort-proxy.chho84.workers.dev';
 var SN, SI, SK, SS;
 var oliverRanking = [];
 
+// 10-minutters frontend-cache
+var _cache = {};
+var CACHE_TTL = 10 * 60 * 1000;
+function cacheGet(key) {
+  var e = _cache[key];
+  if (e && (Date.now() - e.ts < CACHE_TTL)) return e.val;
+  return undefined;
+}
+function cacheSet(key, val) { _cache[key] = { val: val, ts: Date.now() }; return val; }
+
 function lagre() {
   localStorage.setItem('sk_navn', document.getElementById('f-navn').value);
   localStorage.setItem('sk_klubb',document.getElementById('f-klubb').value);
@@ -104,11 +114,14 @@ function laster() {
 }
 
 function sokSpiller(navn, klubb) {
+  var key = 'sok:' + navn + '|' + klubb;
+  var hit = cacheGet(key);
+  if (hit !== undefined) return Promise.resolve(hit);
   return fetch(PROXY + '/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ navn: navn, klubb: klubb })
-  }).then(function(r) { return r.json(); });
+  }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
 }
 
 function api(method, data) {
@@ -128,11 +141,14 @@ function appApi(data) {
 }
 
 function cup2000Api(tournamentNavn) {
+  var key = 'cup2000:' + tournamentNavn + '|' + SN;
+  var hit = cacheGet(key);
+  if (hit !== undefined) return Promise.resolve(hit);
   return fetch(PROXY + '/cup2000', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK })
-  }).then(function(r) { return r.json(); });
+  }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
 }
 
 function hentRanking() {
@@ -314,6 +330,9 @@ function parseKlasse(html, ageGroup) {
 }
 
 function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
+  var key = 'motrank:' + navn + '|' + disc + '|' + (ageGroup || '') + '|' + (klubb || '');
+  var hit = cacheGet(key);
+  if (hit !== undefined) return Promise.resolve(hit);
   return api('SearchPlayer', {
     selectfunction: 'SP1', name: navn, clubid: '', playernumber: '',
     gender: '', agegroupid: '', searchteam: false, licenseonly: false,
@@ -373,7 +392,7 @@ function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
       allMatches[0].fodt = fodt;
       return allMatches[0];
     });
-  }).catch(function() { return null; });
+  }).then(function(r) { return cacheSet(key, r); }).catch(function() { return cacheSet(key, null); });
 }
 
 function sett(tekst) {
