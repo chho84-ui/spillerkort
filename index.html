@@ -743,33 +743,58 @@ function visGruppe(g) {
   overlay.id = 'sk-gruppe-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) lukkGruppe(); };
 
-  function byggTabell(poengMap) {
+  var navnLower = SN.split(' ').pop().toLowerCase();
+
+  function gruppefaseHTML() {
     var rows = g.spillere.map(function(s) {
-      var p = poengMap ? (poengMap[s.navn.toLowerCase()] || '') : '';
       return '<tr class="' + (s.erMeg ? 'meg' : '') + '">'
         + '<td class="pos">' + s.pos + '</td>'
         + '<td>' + s.navn + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + s.klubb + '</span>' : '') + '</td>'
         + '<td class="score">' + s.kV + '-' + s.kT + '</td>'
         + '<td class="score">' + s.sV + '-' + s.sT + '</td>'
-        + '<td class="score">' + (p !== '' ? p + 'p' : (poengMap ? '—' : '')) + '</td>'
         + '</tr>';
     }).join('');
-    var poengHeader = '<th>Poeng</th>';
-    overlay.innerHTML = '<div class="sk-gruppe-panel">'
-      + '<div class="sk-gruppe-hdr">'
-      + '<span class="sk-gruppe-tittel">' + g.disc + ' ' + g.ageGroup + ' \u2014 Gruppestilling</span>'
-      + '<button class="sk-gruppe-xbtn" onclick="lukkGruppe()">\u2715</button>'
-      + '</div>'
+    return '<div style="font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Gruppefase</div>'
       + '<table class="sk-gruppe-tabell">'
-      + '<thead><tr><th>#</th><th>Spiller</th><th>Kamp</th><th>Sett</th>' + poengHeader + '</tr></thead>'
+      + '<thead><tr><th>#</th><th>Spiller</th><th>Kamp</th><th>Sett</th></tr></thead>'
       + '<tbody>' + rows + '</tbody>'
-      + '</table></div>';
+      + '</table>';
   }
 
-  byggTabell(null);
+  function sluttresultatHTML(sluttRows) {
+    var rows = sluttRows.map(function(s) {
+      var erMeg = s.navn.toLowerCase().indexOf(navnLower) !== -1;
+      return '<tr class="' + (erMeg ? 'meg' : '') + '">'
+        + '<td class="pos">' + (s.plass || '') + '</td>'
+        + '<td>' + s.navn + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + s.klubb + '</span>' : '') + '</td>'
+        + '<td class="score">' + (s.poeng ? s.poeng + 'p' : '') + '</td>'
+        + '</tr>';
+    }).join('');
+    return '<div style="font-size:10px;color:#888;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.05em">Sluttresultat</div>'
+      + '<table class="sk-gruppe-tabell">'
+      + '<thead><tr><th>#</th><th>Spiller</th><th>Poeng</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table>';
+  }
+
+  function oppdater(sluttRows) {
+    var panel = overlay.querySelector('.sk-gruppe-panel');
+    if (!panel) return;
+    var content = gruppefaseHTML();
+    if (sluttRows) content += sluttresultatHTML(sluttRows);
+    panel.querySelector('.sk-gruppe-innhold').innerHTML = content;
+  }
+
+  overlay.innerHTML = '<div class="sk-gruppe-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">' + g.disc + ' ' + g.ageGroup + ' \u2014 Gruppestilling</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkGruppe()">\u2715</button>'
+    + '</div>'
+    + '<div class="sk-gruppe-innhold">' + gruppefaseHTML() + '</div>'
+    + '</div>';
   document.body.appendChild(overlay);
 
-  // Hent rankingpoeng asynkront hvis vi har klasse-info
+  // Hent sluttresultat asynkront
   var kl = g.klasser && g.klasser.find(function(k) { return k.name === g.ageGroup; });
   if (!kl) return;
   api('SearchTournamentResults', {
@@ -779,7 +804,6 @@ function visGruppe(g) {
     var html = String((res.d && res.d.Html) || '');
     if (!html) return;
     var doc3 = new DOMParser().parseFromString(html, 'text/html');
-    // Finn riktig disiplin-seksjon
     var discFull = DISC_FULL[g.disc] || '';
     var h2s = doc3.querySelectorAll('h2');
     var targetTable = null;
@@ -791,18 +815,22 @@ function visGruppe(g) {
       }
     }
     if (!targetTable) return;
-    var poengMap = {};
+    var sluttRows = [];
     var trs3 = targetTable.querySelectorAll('tr:not(.headrow)');
+    var lastPlass = '';
     for (var ri = 0; ri < trs3.length; ri++) {
       var playerCell = trs3[ri].querySelector('td.player');
       var pointsCell = trs3[ri].querySelector('td.points');
-      if (!playerCell || !pointsCell) continue;
-      var pts = pointsCell.textContent.trim();
-      if (!pts) continue;
-      var navn = playerCell.textContent.split(',')[0].trim().toLowerCase();
-      poengMap[navn] = pts;
+      var rankCell = trs3[ri].querySelector('td.rank');
+      if (!playerCell) continue;
+      var plass = rankCell ? rankCell.textContent.trim() : '';
+      if (plass) lastPlass = plass;
+      var pts = pointsCell ? pointsCell.textContent.trim() : '';
+      var navn = playerCell.textContent.split(',')[0].trim();
+      var klubb = (playerCell.textContent.split(',')[1] || '').trim();
+      sluttRows.push({ plass: plass || lastPlass, navn: navn, klubb: klubb, poeng: pts });
     }
-    if (Object.keys(poengMap).length) byggTabell(poengMap);
+    if (sluttRows.length) oppdater(sluttRows);
   }).catch(function() {});
 }
 
