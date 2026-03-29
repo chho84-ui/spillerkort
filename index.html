@@ -76,6 +76,7 @@
   .sk-gruppe-tabell td { padding: 5px 4px; border-bottom: 1px solid #0a0a20; color: #ccc; }
   .sk-gruppe-tabell tr.meg td { background: rgba(83,216,251,.08); color: #53d8fb; font-weight: bold; }
   .sk-gruppe-tabell .pos { color: #555; width: 20px; }
+  .sk-res-chip { font-size: 11px; color: #7fffd4; background: rgba(127,255,212,.1); border: 1px solid rgba(127,255,212,.3); border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
   .sk-gruppe-tabell .score { color: #7fffd4; text-align: right; white-space: nowrap; }
   #topbar { background: #16213e; padding: 14px 16px 10px; border-bottom: 2px solid #0f3460; }
   #topbar h1 { font-size: 22px; color: #e94560; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 2px; }
@@ -303,7 +304,7 @@ function sjekkTurnering(tid, info) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
     if (!regs.length) return null;
-    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url };
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: info.klasser };
   });
 }
 
@@ -621,6 +622,49 @@ function visTurnering(t) {
           }
         }
       });
+
+      // Vis rankingpoeng hvis turneringen er ferdig (alle kamper har resultat)
+      var alleHarRes = kamper.length > 0 && kamper.every(function(k) { return !!k.res; });
+      if (alleHarRes && t.klasser && t.klasser.length) {
+        (function(turSec, turT) {
+          Promise.all(turT.klasser.map(function(kl) {
+            return api('SearchTournamentResults', {
+              tournamentclassid: parseInt(kl.id),
+              clientselectfunction: 'SelectTournamentClass1'
+            }).then(function(res) {
+              var html = String((res.d && res.d.Html) || '');
+              if (!html) return null;
+              var doc3 = new DOMParser().parseFromString(html, 'text/html');
+              var rows = doc3.querySelectorAll('table tr:not(.headrow)');
+              for (var ri = 0; ri < rows.length; ri++) {
+                var playerCell = rows[ri].querySelector('td.player');
+                var pointsCell = rows[ri].querySelector('td.points');
+                var rankCell = rows[ri].querySelector('td.rank');
+                if (!playerCell) continue;
+                var playerText = playerCell.textContent.toLowerCase();
+                if (playerText.indexOf(SN.split(' ').pop().toLowerCase()) === -1) continue;
+                var poeng = pointsCell ? pointsCell.textContent.trim() : '';
+                var plass = rankCell ? rankCell.textContent.trim() : '';
+                if (!poeng && !plass) continue;
+                return { disc: kl.name, plass: plass, poeng: poeng };
+              }
+              return null;
+            }).catch(function() { return null; });
+          })).then(function(resultater) {
+            var funn = resultater.filter(function(r) { return r && r.poeng; });
+            if (!funn.length) return;
+            var banner = turSec.querySelector('.sk-sek-banner h3');
+            if (!banner) return;
+            funn.forEach(function(f) {
+              var chip = document.createElement('span');
+              chip.className = 'sk-res-chip';
+              chip.title = f.disc;
+              chip.textContent = (f.plass ? f.plass + '. ' : '') + f.poeng + 'p';
+              banner.appendChild(chip);
+            });
+          });
+        })(sec, t);
+      }
 
       // Asynkron ranking for alle kamper
       for (var mi = 0; mi < kamper.length; mi++) {
