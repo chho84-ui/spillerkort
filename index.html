@@ -283,6 +283,7 @@ function hentAlleKlasser(tournamentId) {
 }
 
 function sjekkTurnering(tid, info) {
+  var klasserMedSpiller = [];
   return Promise.all(info.klasser.map(function(kl) {
     var cid = kl.id || kl;  // bakoverkompatibel med bare-streng
     var klasseNavn = kl.name || '';
@@ -296,6 +297,7 @@ function sjekkTurnering(tid, info) {
       if (html.indexOf(SI) === -1 && html.indexOf(SN) === -1) return [];
       var cupM = html.match(/cup2000\.dk[^\s"']*/i);
       if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
+      klasserMedSpiller.push(kl);
       return parseKlasse(html, ageGroup);
     }).catch(function() { return []; });
   })).then(function(alleRegs) {
@@ -304,7 +306,7 @@ function sjekkTurnering(tid, info) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
     if (!regs.length) return null;
-    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: info.klasser };
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller };
   });
 }
 
