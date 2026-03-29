@@ -238,6 +238,7 @@ function finnTurneringer() {
       if (!kmap[tid2] || kmap[tid2].navn) continue;
       var tds2 = trs2[i].querySelectorAll('td');
       kmap[tid2].dato = tds2[4] ? tds2[4].textContent.trim() : '';
+      kmap[tid2].dager = tds2[2] ? tds2[2].textContent.trim() : '';
       kmap[tid2].navn = tds2[3] ? tds2[3].textContent.trim() : trs2[i].textContent.replace(/\s+/g, ' ').trim().substring(0, 80);
     }
     var tids = Object.keys(kmap);
@@ -476,7 +477,10 @@ function visTurnering(t) {
   var res = document.getElementById('resultat');
   var sec = document.createElement('div');
   sec.className = 'sk-sek';
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + (t.dato || '') + ' ' + (t.navn || 'Turnering') + '</h3></div>';
+  var _mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
+  var _dp = (t.dato || '').split('.');
+  var _turDato = t.dager ? t.dager.replace(/\.\s*$/, '') + '. ' + (_dp[1] ? _mnd[parseInt(_dp[1])-1] : '') + (_dp[2] ? ' ' + _dp[2] : '') : (t.dato || '');
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + _turDato + ' \u2014 ' + (t.navn || 'Turnering') + '</h3></div>';
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
