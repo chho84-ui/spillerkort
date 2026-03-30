@@ -562,6 +562,11 @@ function visTurnering(t) {
         if (klc) klc.innerHTML = '';
       }
       if (!kamper.length) {
+        if (!t.registreringer.length) {
+          // Past tournament stub with no cup2000 games — player wasn't in this tournament
+          if (sec.parentNode) sec.parentNode.removeChild(sec);
+          return;
+        }
         var vBtn = document.createElement('button');
         vBtn.className = 'sk-varsle-mini';
         vBtn.textContent = '\uD83D\uDD14 Varsle meg';
