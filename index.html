@@ -258,6 +258,7 @@ function finnTurneringer() {
       var dayM = dager.match(/(\d+)\.?\s*[-–]\s*(\d+)/);
       var endDay = dayM ? parseInt(dayM[2]) : parseInt(parts[0]);
       var endDate = new Date(year, month, endDay);
+      kmap[tid].isPast = (endDate < today);
       return endDate >= cutoff;
     });
     sett('Sjekker ' + tids.length + ' turneringer...');
@@ -312,7 +313,10 @@ function sjekkTurnering(tid, info) {
     for (var i = 0; i < alleRegs.length; i++) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
-    if (!regs.length) return null;
+    if (!regs.length) {
+      if (info.isPast) return { tournamentId: tid, registreringer: [], navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller };
+      return null;
+    }
     return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller };
   });
 }
@@ -519,7 +523,11 @@ function visTurnering(t) {
       + '</div>';
   }
   var fallbackBtn = t.cup2000Url ? '<a class="sk-btn" href="' + t.cup2000Url + '&search=1" target="_blank" style="margin-top:4px;font-size:11px;background:#0f3460">Åpne i Cup2000</a>' : '';
-  div.innerHTML = rh + fallbackBtn;
+  if (!t.registreringer.length) {
+    div.innerHTML = '<div id="sk-kl-past-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center;padding:2px 0">Laster resultater...</div></div>' + fallbackBtn;
+  } else {
+    div.innerHTML = rh + fallbackBtn;
+  }
   res.appendChild(div);
 
   // Hent ranking for makkere asynkront
@@ -547,6 +555,8 @@ function visTurnering(t) {
     cup2000Api(t.navn, t.cup2000Url).then(function(data) {
       var kamper = data && data.kamper ? data.kamper : (data && data.html ? parseKamper(data.html) : []);
       // Clear loading placeholders
+      var pastKl = document.getElementById('sk-kl-past-' + t.tournamentId);
+      if (pastKl) pastKl.innerHTML = '';
       for (var ci = 0; ci < t.registreringer.length; ci++) {
         var klc = document.getElementById('sk-kl-' + t.tournamentId + '-' + ci);
         if (klc) klc.innerHTML = '';
@@ -587,12 +597,11 @@ function visTurnering(t) {
         discGroups[dc].push(i); // index into sorted kamper
       }
 
-      // Render inn i riktig reg-slot
+      // Render inn i riktig reg-slot (eller pastKl for avsluttede turneringer)
       Object.keys(discGroups).forEach(function(dc) {
         var regIdx = discToRegIdx[dc];
-        if (regIdx === undefined) return;
-        var kl = document.getElementById('sk-kl-' + t.tournamentId + '-' + regIdx);
-        if (!kl) return;
+        var kl = (regIdx !== undefined) ? document.getElementById('sk-kl-' + t.tournamentId + '-' + regIdx) : null;
+        if (!kl && !pastKl) return;
         var entries = discGroups[dc];
         var kh = '';
         for (var j = 0; j < entries.length; j++) {
@@ -617,19 +626,26 @@ function visTurnering(t) {
             + (k.res ? '<span class="sk-kamp-res" style="' + (k.vant === true ? 'color:#7fffd4' : k.vant === false ? 'color:#e94560' : '') + '">' + k.res + '</span>' : '')
             + '</div>';
         }
-        kl.innerHTML = kh;
-        // Vis gruppe-knapp hvis vi har gruppedata for denne disiplinen
-        if (data.grupper && data.grupper.length) {
-          var g = null;
-          for (var gi = 0; gi < data.grupper.length; gi++) { if (data.grupper[gi].disc === dc) { g = data.grupper[gi]; break; } }
-          if (g) {
-            g.klasser = t.klasser;
-            var gruppeBtn = document.createElement('button');
-            gruppeBtn.className = 'sk-gruppe-btn';
-            gruppeBtn.textContent = '\uD83D\uDCCA Vis gruppe (' + g.spillere.length + ' spillere)';
-            (function(gData) { gruppeBtn.onclick = function() { visGruppe(gData); }; })(g);
-            kl.parentNode.insertBefore(gruppeBtn, kl.nextSibling);
+        if (kl) {
+          kl.innerHTML = kh;
+          // Vis gruppe-knapp hvis vi har gruppedata for denne disiplinen
+          if (data.grupper && data.grupper.length) {
+            var g = null;
+            for (var gi = 0; gi < data.grupper.length; gi++) { if (data.grupper[gi].disc === dc) { g = data.grupper[gi]; break; } }
+            if (g) {
+              g.klasser = t.klasser;
+              var gruppeBtn = document.createElement('button');
+              gruppeBtn.className = 'sk-gruppe-btn';
+              gruppeBtn.textContent = '\uD83D\uDCCA Vis gruppe (' + g.spillere.length + ' spillere)';
+              (function(gData) { gruppeBtn.onclick = function() { visGruppe(gData); }; })(g);
+              kl.parentNode.insertBefore(gruppeBtn, kl.nextSibling);
+            }
           }
+        } else {
+          var dcDiv = document.createElement('div');
+          dcDiv.className = 'sk-disc-group';
+          dcDiv.innerHTML = '<div class="sk-disc-header">' + dc + ' <span class="sk-disc-count">(' + entries.length + ')</span></div>' + kh;
+          pastKl.appendChild(dcDiv);
         }
       });
 
