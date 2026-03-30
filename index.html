@@ -255,7 +255,7 @@ function finnTurneringer() {
       var year = parseInt(parts[2]);
       // Finn siste dag fra 'dager' ("28-30" → 30, "28." → 28)
       var dager = kmap[tid].dager || '';
-      var dayM = dager.match(/(\d+)\s*[-–]\s*(\d+)/);
+      var dayM = dager.match(/(\d+)\.?\s*[-–]\s*(\d+)/);
       var endDay = dayM ? parseInt(dayM[2]) : parseInt(parts[0]);
       var endDate = new Date(year, month, endDay);
       return endDate >= cutoff;
