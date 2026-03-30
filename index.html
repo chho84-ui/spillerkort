@@ -242,15 +242,23 @@ function finnTurneringer() {
       kmap[tid2].navn = tds2[3] ? tds2[3].textContent.trim() : trs2[i].textContent.replace(/\s+/g, ' ').trim().substring(0, 80);
     }
     var tids = Object.keys(kmap);
-    // Filtrer ut turneringer der dato er mer enn 21 dager gammel
-    // ('dato' er påmeldingsfristen, ikke turneringsdatoen - kan være 2-3 uker før)
-    var cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - 21);
+    // Vis kommende turneringer + gjennomførte i opptil 7 dager etter siste dag.
+    // 'dato' er startdato (dd.MM.yyyy), 'dager' er dagintervall f.eks "28-30".
+    var today = new Date(); today.setHours(0,0,0,0);
+    var cutoff = new Date(today); cutoff.setDate(today.getDate() - 7);
     tids = tids.filter(function(tid) {
       var dato = kmap[tid].dato; // "dd.MM.yyyy"
       if (!dato) return true;
       var parts = dato.split('.');
-      var d = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
-      return d >= cutoff;
+      if (parts.length < 3) return true;
+      var month = parseInt(parts[1]) - 1;
+      var year = parseInt(parts[2]);
+      // Finn siste dag fra 'dager' ("28-30" → 30, "28." → 28)
+      var dager = kmap[tid].dager || '';
+      var dayM = dager.match(/(\d+)\s*[-–]\s*(\d+)/);
+      var endDay = dayM ? parseInt(dayM[2]) : parseInt(parts[0]);
+      var endDate = new Date(year, month, endDay);
+      return endDate >= cutoff;
     });
     sett('Sjekker ' + tids.length + ' turneringer...');
 
