@@ -16,7 +16,8 @@ body { background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, Roboto, 
 .sk-sek { margin-bottom: 10px; }
 .sk-sek h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #fff; background: #0f3460; padding: 5px 10px; border-left: 3px solid #e94560; margin: 0 0 8px; }
 .sk-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
-.sk-chip { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 8px; text-align: center; }
+.sk-chip { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 8px; text-align: center; cursor: pointer; }
+.sk-chip:hover { border-color: #e94560; background: #1e1a3a; }
 .sk-chip .r-d { font-size: 9px; color: #888; }
 .sk-chip .r-k { font-size: 10px; color: #ccc; }
 .sk-chip .r-p { font-size: 20px; font-weight: bold; color: #e94560; }

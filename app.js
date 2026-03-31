@@ -101,7 +101,17 @@ function hentRanking() {
         var cells = [];
         for (var j = 0; j < tds.length; j++) cells.push(tds[j].textContent.trim());
         var last = cells[cells.length - 1];
-        if (/^\d+$/.test(last)) rows.push({ disiplin: cells[0], klasse: cells[1] || '', plass: last });
+        if (/^\d+$/.test(last)) {
+          // Hent lenke fra siste <td> hvis den finnes
+          var lastTd = tds[tds.length - 1];
+          var a = lastTd.querySelector('a');
+          var rankUrl = a ? a.getAttribute('href') : null;
+          // Gjør relativ URL absolutt
+          if (rankUrl && !rankUrl.startsWith('http')) {
+            rankUrl = 'https://badmintonportalen.no' + (rankUrl.startsWith('/') ? '' : '/') + rankUrl;
+          }
+          rows.push({ disiplin: cells[0], klasse: cells[1] || '', plass: last, url: rankUrl });
+        }
       }
     }
     oliverRanking = rows;
@@ -412,9 +422,14 @@ function visRanking(rows) {
   for (var i = 0; i < rows.length; i++) {
     var c = document.createElement('div');
     c.className = 'sk-chip';
-    c.innerHTML = '<div class="r-d">' + rows[i].disiplin + '</div>'
+    var inner = '<div class="r-d">' + rows[i].disiplin + '</div>'
       + '<div class="r-k">' + rows[i].klasse + '</div>'
       + '<div class="r-p">#' + rows[i].plass + '</div>';
+    var chipUrl = rows[i].url || 'https://badmintonportalen.no/NBF/Ranglister/';
+    c.style.cursor = 'pointer';
+    c.title = 'Åpne rankingliste';
+    c.onclick = (function(url) { return function() { window.open(url, '_blank'); }; })(chipUrl);
+    c.innerHTML = inner;
     grid.appendChild(c);
   }
 }
