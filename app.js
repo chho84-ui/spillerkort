@@ -102,15 +102,15 @@ function hentRanking() {
         for (var j = 0; j < tds.length; j++) cells.push(tds[j].textContent.trim());
         var last = cells[cells.length - 1];
         if (/^\d+$/.test(last)) {
-          // Hent lenke fra siste <td> hvis den finnes
-          var lastTd = tds[tds.length - 1];
-          var a = lastTd.querySelector('a');
+          // Lenke til rankinglisten ligger i første <td>
+          var firstTd = tds[0];
+          var a = firstTd.querySelector('a');
           var rankUrl = a ? a.getAttribute('href') : null;
           // Gjør relativ URL absolutt
           if (rankUrl && !rankUrl.startsWith('http')) {
             rankUrl = 'https://badmintonportalen.no' + (rankUrl.startsWith('/') ? '' : '/') + rankUrl;
           }
-          rows.push({ disiplin: cells[0], klasse: cells[1] || '', plass: last, url: rankUrl });
+          rows.push({ disiplin: cells[0], klasse: cells[2] || cells[1] || '', plass: last, url: rankUrl });
         }
       }
     }
