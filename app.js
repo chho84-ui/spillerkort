@@ -149,6 +149,7 @@ function finnTurneringer() {
       kmap[tid2].dato = tds2[4] ? tds2[4].textContent.trim() : '';
       kmap[tid2].dager = tds2[2] ? tds2[2].textContent.trim() : '';
       kmap[tid2].navn = tds2[3] ? tds2[3].textContent.trim() : trs2[i].textContent.replace(/\s+/g, ' ').trim().substring(0, 80);
+      console.log('TURNERING', kmap[tid2].navn, '| alle celler:', Array.from(tds2).map(function(td,i){return i+':'+td.textContent.trim();}));
     }
     var tids = Object.keys(kmap);
     // Vis kommende turneringer + gjennomførte i opptil 7 dager etter siste dag.
