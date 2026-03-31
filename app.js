@@ -146,10 +146,32 @@ function finnTurneringer() {
       var tid2 = idM[1];
       if (!kmap[tid2] || kmap[tid2].navn) continue;
       var tds2 = trs2[i].querySelectorAll('td');
-      kmap[tid2].dato = tds2[4] ? tds2[4].textContent.trim() : '';
-      kmap[tid2].dager = tds2[2] ? tds2[2].textContent.trim() : '';
+      // tds2[1] = ukenummer, tds2[2] = dager f.eks "10.-12.", tds2[4] = påmeldingsfrist
+      // Beregn dato fra ukenummer + år fra fristen
+      var dagerTekst = tds2[2] ? tds2[2].textContent.trim() : '';
+      var fristTekst = tds2[4] ? tds2[4].textContent.trim() : '';
+      var fristParts = fristTekst.split('.');
+      var turAar = parseInt(fristParts[2]) || new Date().getFullYear();
+      var ukeNr = parseInt(tds2[1] ? tds2[1].textContent.trim() : '0');
+      var startDagM = dagerTekst.match(/(\d+)/);
+      var startDag = startDagM ? parseInt(startDagM[1]) : 1;
+      // Finn dato fra ukenummer (ISO: uke 1 = uke med første torsdag)
+      var jan4 = new Date(turAar, 0, 4);
+      var startOfWeek1 = new Date(jan4);
+      startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+      var turDato = new Date(startOfWeek1);
+      turDato.setDate(startOfWeek1.getDate() + (ukeNr - 1) * 7);
+      // Juster til riktig ukedag basert på startdag i måneden
+      // Finn mandag i uke ukeNr, og match startDag
+      var mnd = turDato.getMonth() + 1;
+      var aar = turDato.getFullYear();
+      // Hvis startDag ikke stemmer med beregnet dato, bruk nærmeste dato med riktig dag
+      turDato.setDate(startDag);
+      // Sjekk at måneden er rimelig (kan være off-by-one ved ukeoverganger)
+      if (Math.abs(turDato.getMonth() + 1 - mnd) > 1) turDato.setMonth(mnd - 1);
+      kmap[tid2].dato = String(startDag).padStart(2,'0') + '.' + String(turDato.getMonth()+1).padStart(2,'0') + '.' + turDato.getFullYear();
+      kmap[tid2].dager = dagerTekst;
       kmap[tid2].navn = tds2[3] ? tds2[3].textContent.trim() : trs2[i].textContent.replace(/\s+/g, ' ').trim().substring(0, 80);
-      console.log('TURNERING', kmap[tid2].navn, '| alle celler:', Array.from(tds2).map(function(td,i){return i+':'+td.textContent.trim();}));
     }
     var tids = Object.keys(kmap);
     // Vis kommende turneringer + gjennomførte i opptil 7 dager etter siste dag.
