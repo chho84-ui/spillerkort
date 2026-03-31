@@ -503,6 +503,7 @@ function visTurnering(t) {
         if (!t.registreringer.length) {
           // Past tournament stub with no cup2000 games — player wasn't in this tournament
           if (sec.parentNode) sec.parentNode.removeChild(sec);
+          if (div.parentNode) div.parentNode.removeChild(div);
           return;
         }
         var vBtn = document.createElement('button');
