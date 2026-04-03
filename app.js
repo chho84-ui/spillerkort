@@ -486,7 +486,7 @@ function visTurnering(t) {
           return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + m.navn.replace(/'/g, "\\'") + '\',\'' + (m.klubb||'').replace(/'/g, "\\'") + '\')">' + m.navn + '</span>'
             + (m.klubb ? ' <span style="opacity:.7">(' + m.klubb + ')</span>' : '');
         }).join(', ');
-        makkerHtml = '<span class="sk-makker">m/ ' + makkerNavn
+        makkerHtml = '<span class="sk-makker">m ' + makkerNavn
           + ' <span class="sk-rank-mini" id="sk-mkr-' + t.tournamentId + '-' + i + '"></span></span>';
       }
     }
