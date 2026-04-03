@@ -600,7 +600,7 @@ function visTurnering(t) {
                   return spillere.map(function(s, si) {
                     return '<span id="sk-mot-' + t.tournamentId + '-' + kpi + '-p' + si
                       + '" class="sk-mot-link" onclick="aapneMotstander(\'' + s.navn.replace(/'/g, "\\'") + '\',\'' + (s.klubb||'').replace(/'/g, "\\'") + '\')">' + s.navn + '</span>';
-                  }).join(' / ');
+                  }).join(' ');
                 }
                 return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + (kp.mot||'').replace(/'/g, "\\'") + '\',\'' + (kp.motKlubb||'').replace(/'/g, "\\'") + '\')">' + (kp.mot || '') + '</span>';
               })(k, ki)
