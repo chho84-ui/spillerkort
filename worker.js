@@ -126,21 +126,6 @@ async function handleRequest(request) {
     const BASE = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA = { 'User-Agent': 'Mozilla/5.0' };
 
-    // Steg 2: Hent klasse-navigasjon for å finne alle c/e-kombinasjoner (med aldersgruppe)
-    const navJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=0`, { headers: UA })).json();
-    const navHtml = navJson.data || '';
-    const classes = [];
-    // Parse rad for rad: <tr><td>U15 A</td><td>...lenker...</td></tr>
-    for (const row of navHtml.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
-      const ag = row[1].replace(/&nbsp;/g,'').trim();
-      if (!ag || ag === 'Klasser') continue;
-      for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]+)<\/a>/g)) {
-        classes.push({ c: lm[1], e: lm[2], disc: lm[3].trim(), ageGroup: ag });
-      }
-    }
-    if (!classes.length) return json({ kamper: [] });
-
-    // Disiplin-kart: cup2000 navn → kort kode
     const DISC_MAP = [
       ['herresingle', 'HS'], ['damesingle', 'DS'],
       ['herredouble', 'HD'], ['damedouble', 'DD'],
@@ -151,59 +136,115 @@ async function handleRequest(request) {
       for (const [k, v] of DISC_MAP) if (n.includes(k)) return v;
       return '';
     }
-
-    // Steg 3: Hent alle klasser parallelt og finn spillerens kamper
-    // HTML-entity dekoder (norske tegn)
     function decEnt(s) {
       return s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
     }
 
     const navnLower = (body.navn || '').split(' ').pop().toLowerCase();
 
+    // Steg 2: Hent klasse-navigasjon for å finne alle c/e-kombinasjoner
+    const navJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=0`, { headers: UA })).json();
+    const classes = [];
+
+    if (typeof navJson.data === 'string') {
+      // renderMethod 1: HTML med klasse-lenker
+      for (const row of navJson.data.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
+        const ag = row[1].replace(/&nbsp;/g, '').trim();
+        if (!ag || ag === 'Klasser') continue;
+        for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]+)<\/a>/g)) {
+          classes.push({ c: lm[1], e: lm[2], disc: lm[3].trim(), ageGroup: ag });
+        }
+      }
+    }
+
+    if (!classes.length) {
+      // Fallback: hent klasse-lenker fra HTML-siden (fungerer uavhengig av renderMethod)
+      const pageHtml = await (await fetch(`https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=${cup2000Id}`, { headers: UA })).text();
+      for (const lm of pageHtml.matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]{2,40})<\/a>/g)) {
+        const c = lm[1], e = lm[2], disc = lm[3].trim();
+        if (!classes.some(x => x.c === c && x.e === e) && /single|double|mixed/i.test(disc)) {
+          classes.push({ c, e, disc, ageGroup: '' });
+        }
+      }
+    }
+
+    if (!classes.length) return json({ kamper: [] });
+
+    // Steg 3: Per klasse — finn spillerens puljer, hent kamper per pulje
     const fetchClass = async ({ c, e, disc, ageGroup }) => {
       const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
-      if (!Array.isArray(d.data) || d.data.length < 3) return [];
-      const [, players, matchInfo] = d.data;
-
-      // Finn spillerens indekser (1-basert)
-      const playerIdxs = new Set();
-      players.forEach((p, i) => {
-        (p[5] || []).forEach(n => {
-          if (n.toLowerCase().includes(navnLower)) playerIdxs.add(i + 1);
-        });
-      });
-      if (!playerIdxs.size) return [];
-
-      const rounds = matchInfo[0] || [];
-      const courts = matchInfo[1] || [];
-      const courtMap = {};
-      courts.forEach(ct => { courtMap[ct[0]] = ct[1]; });
-
+      if (!Array.isArray(d.data)) return [];
+      const puljer = d.data[0] && Array.isArray(d.data[0][3]) ? d.data[0][3] : [];
       const dc = discCode(disc);
+
+      // Finn puljer der spilleren er med
+      const minePuljer = [];
+      for (const pulje of puljer) {
+        const puljeId = pulje[0];
+        const spillere = Array.isArray(pulje[1]) ? pulje[1] : [];
+        // Pulje-spillere: s = [0, ["Navn, Klubb"]] (enkelt) eller [0, ["Sp1, Klubb", "Sp2, Klubb"]] (double)
+        const harSpiller = spillere.some(s => {
+          const navnArr = Array.isArray(s[1]) ? s[1] : [];
+          return navnArr.some(n => decEnt(String(n)).toLowerCase().includes(navnLower));
+        });
+        if (harSpiller) minePuljer.push(puljeId);
+      }
+      if (!minePuljer.length) return [];
+
+      // Hent kamper for hver pulje
       const kamper = [];
-      for (const match of rounds) {
-        const p1i = match[8], p2i = match[9];
-        if (!playerIdxs.has(p1i) && !playerIdxs.has(p2i)) continue;
-        const myIdx = playerIdxs.has(p1i) ? p1i : p2i;
-        const oppIdx = myIdx === p1i ? p2i : p1i;
-        const oppEntry = players[oppIdx - 1] || [];
-        const oppRaw = (oppEntry[5] || []).map(n => decEnt(n));
-        const motSpillere = oppRaw.map(n => ({
-          navn: n.split(',')[0].trim(),
-          klubb: (n.split(',')[1] || '').trim()
-        }));
-        const mot = motSpillere.map(s => s.navn).join(' / ');
-        const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
-        // match[2] = "09:45 28-03-2026" - keep date too, reformat to "28-03 09:45"
-        const rawTime = match[2] || '';
-        const timeParts = rawTime.split(' ');
-        const timeStr = timeParts.length >= 2
-          ? timeParts[1].substring(0, 5) + ' ' + timeParts[0]
-          : timeParts[0];
-        const bane = String(match[1] || '');
-        const r1 = match[3], r2 = match[4];
-        const res = (r1 || r2) ? (myIdx === p1i ? `${r1}-${r2}` : `${r2}-${r1}`) : '';
-        kamper.push({ tid: timeStr, bane: bane, disc: dc, mot: mot, motKlubb: motKlubb, motSpillere: motSpillere, ageGroup: ageGroup, res: res });
+      for (const puljeId of minePuljer) {
+        const pd = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=0&g=${puljeId}`, { headers: UA })).json();
+        if (!Array.isArray(pd.data) || pd.data.length < 3) continue;
+
+        // pd.data[1] = spillere: [spillerIdx, ..., ..., ..., ..., [navn1, navn2?], ...]
+        // For doubles er s[5] = ["Sp1, Klubb", "Sp2, Klubb"]
+        const spillerMap = {};
+        for (const s of (pd.data[1] || [])) {
+          const idx = s[0];
+          const navnArr = Array.isArray(s[5]) ? s[5].map(n => decEnt(String(n))) : [];
+          spillerMap[idx] = navnArr.map(n => ({
+            navn: n.split(',')[0].trim(),
+            klubb: (n.split(',')[1] || '').trim()
+          }));
+        }
+
+        // pd.data[2][0] = kamparray: [bane, ?, tid, ?, ?, ?, [], [], p1idx, p2idx, res, ...]
+        const rounds = Array.isArray(pd.data[2]) && Array.isArray(pd.data[2][0]) ? pd.data[2][0] : [];
+        for (const match of rounds) {
+          if (!Array.isArray(match)) continue;
+          const p1idx = match[8], p2idx = match[9];
+          const sp1list = spillerMap[p1idx] || [];
+          const sp2list = spillerMap[p2idx] || [];
+          const isSp1 = sp1list.some(s => s.navn.toLowerCase().includes(navnLower));
+          const isSp2 = sp2list.some(s => s.navn.toLowerCase().includes(navnLower));
+          if (!isSp1 && !isSp2) continue;
+
+          const motSpillere = isSp1 ? sp2list : sp1list;
+          const mot = motSpillere.map(s => s.navn).join(' / ');
+          const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+
+          const rawTime = String(match[2] || '');
+          const tp = rawTime.split(' ');
+          const timeStr = tp.length >= 2 ? tp[1].substring(0, 5) + ' ' + tp[0] : tp[0];
+          const bane = String(match[0] || '');
+
+          // Resultat: match[10] = null eller sett-data
+          const resRaw = match[10];
+          let res = '';
+          if (resRaw != null && typeof resRaw === 'object' && !Array.isArray(resRaw)) {
+            // noop
+          } else if (Array.isArray(resRaw)) {
+            const chunks = [];
+            for (let i = 0; i + 1 < resRaw.length; i += 2) {
+              if (resRaw[i] == null) break;
+              chunks.push(isSp1 ? `${resRaw[i]}-${resRaw[i+1]}` : `${resRaw[i+1]}-${resRaw[i]}`);
+            }
+            res = chunks.join(', ');
+          }
+
+          kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res });
+        }
       }
       return kamper;
     };
@@ -235,17 +276,9 @@ async function handleRequest(request) {
     const BASE2 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA2 = { 'User-Agent': 'Mozilla/5.0' };
 
-    const navJson2 = await (await fetch(`${BASE2}?tournamentid=${cup2000Id}&c=0`, { headers: UA2 })).json();
-    const navHtml2 = navJson2.data || '';
-    const classes2 = [];
-    for (const row of navHtml2.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
-      const ag = row[1].replace(/&nbsp;/g,'').trim();
-      if (!ag || ag === 'Klasser') continue;
-      for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]+)<\/a>/g)) {
-        classes2.push({ c: lm[1], e: lm[2], disc: lm[3].trim(), ageGroup: ag });
-      }
-    }
-    if (!classes2.length) return json({ kamper: [] });
+    // Hent pågående kamper via o=1
+    const liveJson = await (await fetch(`${BASE2}?tournamentid=${cup2000Id}&o=1`, { headers: UA2 })).json();
+    const courts2 = Array.isArray(liveJson.data) ? (liveJson.data[3] || []) : [];
 
     const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
     function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
@@ -253,40 +286,132 @@ async function handleRequest(request) {
 
     const navnLow2 = (body.navn || '').split(' ').pop().toLowerCase();
 
-    const fetchClassAll = async ({ c, e, disc, ageGroup }) => {
-      const d = await (await fetch(`${BASE2}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA2 })).json();
-      if (!Array.isArray(d.data) || d.data.length < 3) return [];
-      const [, players, matchInfo] = d.data;
-      const rounds = matchInfo[0] || [];
-      const dc = discCode2(disc);
-      const kamper = [];
-      for (const match of rounds) {
-        const p1i = match[8], p2i = match[9];
-        if (!p1i || !p2i) continue;
-        const makeSpillere = (entry) => (entry[5] || []).map(n => {
-          const dn = decEnt2(n);
-          return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1] || '').trim() };
-        });
-        const spiller1 = makeSpillere(players[p1i - 1] || []);
-        const spiller2 = makeSpillere(players[p2i - 1] || []);
+    const kamper2 = [];
+    for (const court of courts2) {
+      if (!Array.isArray(court)) continue;
+      for (const match of court) {
+        if (!Array.isArray(match)) continue;
+        const sp1raw = Array.isArray(match[6]) ? match[6] : [];
+        const sp2raw = Array.isArray(match[7]) ? match[7] : [];
+        const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+        const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
         const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
         const mine = allNames.some(n => n.includes(navnLow2));
-        const rawTime = match[2] || '';
+        const discFull = String(match[4] || '');
+        const dc = discCode2(discFull);
+        const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
+        const ageGroup = ageGroupM ? ageGroupM[0].toUpperCase() : '';
+        const rawTime = String(match[2] || '');
         const tp = rawTime.split(' ');
         const tid = tp.length >= 2 ? tp[1].substring(0,5) + ' ' + tp[0] : tp[0];
-        const res1 = match[3] != null ? String(match[3]) : '';
-        const res2 = match[4] != null ? String(match[4]) : '';
-        kamper.push({ tid, bane: String(match[1] || ''), disc: dc, ageGroup, spiller1, spiller2, res1, res2, mine });
+        const sets = Array.isArray(match[10]) ? match[10] : [];
+        const res1 = sets[0] != null ? String(sets[0]) : '';
+        const res2 = sets[1] != null ? String(sets[1]) : '';
+        kamper2.push({ tid, bane: String(match[0] || ''), disc: dc, ageGroup, spiller1, spiller2, res1, res2, mine });
       }
-      return kamper;
-    };
-
-    const all2 = await Promise.all(classes2.map(fetchClassAll));
-    const kamper2 = all2.flat().sort((a,b) => (a.tid||'').localeCompare(b.tid||''));
+    }
+    kamper2.sort((a,b) => (a.tid||'').localeCompare(b.tid||''));
     return json({ kamper: kamper2 });
   }
 
+  if (path === '/varsle') {
+    let body;
+    try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
+    const { email, tournamentNavn, cup2000Url, navn, klubb } = body;
+    if (!email || !tournamentNavn) return json({error: 'Mangler felt'}, 400);
+
+    const key = `varsle:${tournamentNavn}:${email}`;
+    await VARSLER.put(key, JSON.stringify({ email, tournamentNavn, cup2000Url: cup2000Url || '', navn: navn || '', klubb: klubb || '', registrert: Date.now() }), { expirationTtl: 60 * 60 * 24 * 30 });
+    return json({ok: true});
+  }
+
   return new Response('Not found', { status: 404, headers: CORS });
+}
+
+async function sendResend(email, fornavn, tournamentNavn) {
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${RESEND_API_KEY}`
+    },
+    body: JSON.stringify({
+      from: 'Goodminton <noreply@send.goodminton.no>',
+      to: [email],
+      subject: `Kampprogram klart \u2013 ${tournamentNavn}`,
+      html: `<p>Hei${fornavn ? ' ' + fornavn : ''}!</p>
+<p>Kamprogrammet for <strong>${tournamentNavn}</strong> er n\u00e5 tilgjengelig.</p>
+<p><a href="https://goodminton.no">Åpne goodminton.no</a> for \u00e5 se kampene dine.</p>
+<p style="color:#888;font-size:12px">Du mottar denne e-posten fordi du ba om varsel p\u00e5 goodminton.no.</p>`
+    })
+  });
+  return r.ok;
+}
+
+async function cup2000HarKamper(tournamentNavn, cup2000Url) {
+  // Finn cup2000 tournamentId
+  let cup2000Id = null;
+  if (cup2000Url) {
+    const m = cup2000Url.match(/tournamentid=(\d+)/i);
+    if (m) cup2000Id = m[1];
+  }
+  if (!cup2000Id && tournamentNavn) {
+    const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    })).text();
+    const navnNorm = tournamentNavn.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
+      const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
+      if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
+        cup2000Id = m[1]; break;
+      }
+    }
+  }
+  if (!cup2000Id) return false;
+
+  const BASE = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
+  const navJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=0`, { headers: { 'User-Agent': 'Mozilla/5.0' } })).json();
+  const navHtml = navJson.data || '';
+  // Sjekk om det finnes minst én klasse med tidssatte kamper (data.length >= 3)
+  for (const row of navHtml.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
+    const ag = row[1].replace(/&nbsp;/g, '').trim();
+    if (!ag || ag === 'Klasser') continue;
+    for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>/g)) {
+      const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${lm[1]}&e=${lm[2]}`, { headers: { 'User-Agent': 'Mozilla/5.0' } })).json();
+      if (Array.isArray(d.data) && d.data.length >= 3) return true;
+    }
+  }
+  return false;
+}
+
+addEventListener('scheduled', function(event) {
+  event.waitUntil(handleScheduled());
+});
+
+async function handleScheduled() {
+  const list = await VARSLER.list({ prefix: 'varsle:' });
+  if (!list.keys.length) return;
+
+  // Grupper per turnering for å unngå å sjekke cup2000 flere ganger
+  const turneringer = {};
+  for (const key of list.keys) {
+    const val = await VARSLER.get(key.name, { type: 'json' });
+    if (!val) continue;
+    const tn = val.tournamentNavn;
+    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [] };
+    turneringer[tn].mottakere.push({ key: key.name, email: val.email, navn: val.navn });
+  }
+
+  for (const [tournamentNavn, info] of Object.entries(turneringer)) {
+    const harKamper = await cup2000HarKamper(tournamentNavn, info.cup2000Url);
+    if (!harKamper) continue;
+
+    for (const m of info.mottakere) {
+      const fornavn = m.navn ? m.navn.split(' ')[0] : '';
+      const ok = await sendResend(m.email, fornavn, tournamentNavn);
+      if (ok) await VARSLER.delete(m.key);
+    }
+  }
 }
 
 addEventListener('fetch', function(event) {
