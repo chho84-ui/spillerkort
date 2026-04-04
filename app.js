@@ -850,7 +850,7 @@ function aapneMotstander(navn, klubb) {
   document.getElementById('f-navn').value = navn;
   document.getElementById('f-klubb').value = klubb || '';
   window.scrollTo(0, 0);
-  hent();
+  setTimeout(hent, 0);
 }
 
 function hent() {
