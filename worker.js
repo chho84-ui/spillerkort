@@ -30,7 +30,7 @@ function json(data, status) {
   });
 }
 
-async function handleRequest(request) {
+async function handleRequest(request, env) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS });
   }
@@ -64,15 +64,22 @@ async function handleRequest(request) {
     const re2 = /SP1\('(\d+)'/g;
     let m2;
     while ((m2 = re2.exec(shtml)) !== null) hits.push(m2[1]);
-    if (!hits.length) return json({error: 'Spiller ikke funnet', html: shtml.substring(0, 500)}, 404);
-    if (hits.length === 1) return json({playerid: hits[0]});
-    const klubbLower = (body.klubb || '').toLowerCase();
-    for (const pid of hits) {
-      const idx = shtml.indexOf("SP1('" + pid + "'");
-      const chunk = shtml.substring(idx, idx + 400).toLowerCase();
-      if (klubbLower && chunk.indexOf(klubbLower) !== -1) return json({playerid: pid});
+    if (!hits.length) {
+      if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'not_found'], doubles: [0], indexes: ['search'] });
+      return json({error: 'Spiller ikke funnet', html: shtml.substring(0, 500)}, 404);
     }
-    return json({playerid: hits[0], multiple: hits});
+    const klubbLower = (body.klubb || '').toLowerCase();
+    let foundId = hits[0];
+    if (hits.length > 1) {
+      for (const pid of hits) {
+        const idx = shtml.indexOf("SP1('" + pid + "'");
+        const chunk = shtml.substring(idx, idx + 400).toLowerCase();
+        if (klubbLower && chunk.indexOf(klubbLower) !== -1) { foundId = pid; break; }
+      }
+    }
+    if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'found', foundId], doubles: [hits.length], indexes: ['search'] });
+    if (hits.length === 1) return json({playerid: foundId});
+    return json({playerid: foundId, multiple: hits});
   }
 
   if (path === '/api') {
@@ -415,5 +422,5 @@ async function handleScheduled() {
 }
 
 addEventListener('fetch', function(event) {
-  event.respondWith(handleRequest(event.request));
+  event.respondWith(handleRequest(event.request, typeof ANALYTICS !== 'undefined' ? { ANALYTICS: ANALYTICS } : {}));
 });
