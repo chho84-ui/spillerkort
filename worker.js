@@ -321,6 +321,30 @@ async function handleRequest(request, env) {
     return json({ kamper: kamper2 });
   }
 
+  if (path === '/stats') {
+    const account_id = 'b88a9b1ba068ad113b6ed1b8266d3587';
+    const query = `
+      SELECT blob1 as navn, blob2 as klubb, blob3 as resultat, count() as antall
+      FROM goodminton_searches
+      WHERE index1 = 'search'
+        AND timestamp > NOW() - INTERVAL '30' DAY
+      GROUP BY navn, klubb, resultat
+      ORDER BY antall DESC
+      LIMIT 50
+    `;
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account_id}/analytics_engine/sql`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CF_ANALYTICS_TOKEN}`,
+        'Content-Type': 'text/plain'
+      },
+      body: query
+    });
+    if (!r.ok) return json({ error: 'Analytics query feilet', status: r.status }, 502);
+    const data = await r.json();
+    return json(data);
+  }
+
   if (path === '/varsle') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
