@@ -233,7 +233,24 @@ async function handleRequest(request, env) {
 
           const rawTime = String(match[2] || '');
           const tp = rawTime.split(' ');
-          const timeStr = tp.length >= 2 ? tp[1].substring(0, 5) + ' ' + tp[0] : tp[0];
+          let timeStr;
+          if (tp.length >= 2) {
+            // cup2000 format varierer: "HH:MM DD-MM" eller "YYYY-MM-DD HH:MM:SS"
+            const p0 = tp[0], p1 = tp[1].substring(0, 5);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(p0)) {
+              // ISO: "YYYY-MM-DD" → "DD-MM HH:MM"
+              const dp2 = p0.split('-');
+              timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1;
+            } else if (/^\d{2}:\d{2}/.test(p0)) {
+              // "HH:MM DD-MM" → "DD-MM HH:MM"
+              timeStr = p1 + ' ' + p0.substring(0, 5);
+            } else {
+              // Allerede "DD-MM HH:MM"
+              timeStr = p0 + ' ' + p1;
+            }
+          } else {
+            timeStr = tp[0];
+          }
           const bane = String(match[0] || '');
 
           // Resultat: match[10] = null eller sett-data
