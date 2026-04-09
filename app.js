@@ -436,10 +436,14 @@ function visRanking(rows) {
 
 function parseTid(tid) {
   if (!tid) return null;
-  var m = tid.match(/^(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
-  if (!m) return null;
   var yr = new Date().getFullYear();
-  return new Date(yr, parseInt(m[2])-1, parseInt(m[1]), parseInt(m[3]), parseInt(m[4]));
+  // "DD-MM HH:MM"
+  var m = tid.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (m) return new Date(yr, parseInt(m[2])-1, parseInt(m[1]), parseInt(m[3]), parseInt(m[4]));
+  // "HH:MM DD-MM" (gammelt cache-format)
+  var m2 = tid.match(/^(\d{2}):(\d{2})\s+(\d{2})-(\d{2})/);
+  if (m2) return new Date(yr, parseInt(m2[4])-1, parseInt(m2[3]), parseInt(m2[1]), parseInt(m2[2]));
+  return null;
 }
 
 function formatTid(tid) {
@@ -557,7 +561,11 @@ function visTurnering(t) {
       }
 
       // Sorter kamper etter tidspunkt
-      kamper.sort(function(a, b) { return (a.tid || '').localeCompare(b.tid || ''); });
+      kamper.sort(function(a, b) {
+        var ta = parseTid(a.tid), tb = parseTid(b.tid);
+        if (ta && tb) return ta - tb;
+        return (a.tid || '').localeCompare(b.tid || '');
+      });
       // Finn neste kamp (første uten resultat med fremtidig tid)
       var nowT = new Date();
       var nextKampIdx = -1;
@@ -604,11 +612,14 @@ function visTurnering(t) {
           // Parser tid-streng: støtter "DD-MM HH:MM" (worker) og "HH:MM" (parseKamper)
           var tidDato = null, tidKl = '--:--';
           if (k.tid) {
-            // "DD-MM HH:MM" eller "DD-MM HH:MM:SS"
-            var _tm = k.tid.match(/^(\d{2})-(\d{2})\s+(\d{2}:\d{2})/);
-            if (_tm) { tidDato = _tm[1] + '-' + _tm[2]; tidKl = _tm[3]; }
+            // "DD-MM HH:MM" (worker, nytt format)
+            var _tm = k.tid.match(/^(\d{2}-\d{2})\s+(\d{2}:\d{2})/);
+            if (_tm) { tidDato = _tm[1]; tidKl = _tm[2]; }
+            // "HH:MM DD-MM" (worker, gammelt format i cache)
+            else { var _tm2 = k.tid.match(/^(\d{2}:\d{2})\s+(\d{2}-\d{2})/);
+            if (_tm2) { tidDato = _tm2[2]; tidKl = _tm2[1]; }
             // "HH:MM" kun (fra HTML-parsing)
-            else if (/^\d{2}:\d{2}/.test(k.tid)) { tidKl = k.tid.substring(0, 5); }
+            else if (/^\d{2}:\d{2}/.test(k.tid)) { tidKl = k.tid.substring(0, 5); } }
           }
           // Dagseparator når datoen skifter
           if (tidDato && tidDato !== lastDag) {
