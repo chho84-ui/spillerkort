@@ -147,7 +147,10 @@ async function handleRequest(request, env) {
       return s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
     }
 
-    const navnLower = (body.navn || '').split(' ').pop().toLowerCase();
+    // Bruk hele navnet for matching (ikke bare etternavn) for å unngå falske treff
+    const navnFull = (body.navn || '').toLowerCase();
+    const navnLower = navnFull;
+    const klubbLower = (body.klubb || '').toLowerCase();
 
     // Steg 2: Hent klasse-navigasjon for å finne alle c/e-kombinasjoner
     const navJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=0`, { headers: UA })).json();
@@ -192,7 +195,13 @@ async function handleRequest(request, env) {
         // Pulje-spillere: s = [0, ["Navn, Klubb"]] (enkelt) eller [0, ["Sp1, Klubb", "Sp2, Klubb"]] (double)
         const harSpiller = spillere.some(s => {
           const navnArr = Array.isArray(s[1]) ? s[1] : [];
-          return navnArr.some(n => decEnt(String(n)).toLowerCase().includes(navnLower));
+          return navnArr.some(n => {
+            const entry = decEnt(String(n)).toLowerCase();
+            const parts = navnFull.split(' ').filter(Boolean);
+            return parts.length >= 2
+              ? entry.includes(parts[0]) && entry.includes(parts[parts.length - 1])
+              : entry.includes(navnFull);
+          });
         });
         if (harSpiller) minePuljer.push(puljeId);
       }
@@ -223,8 +232,15 @@ async function handleRequest(request, env) {
           const p1idx = match[8], p2idx = match[9];
           const sp1list = spillerMap[p1idx] || [];
           const sp2list = spillerMap[p2idx] || [];
-          const isSp1 = sp1list.some(s => s.navn.toLowerCase().includes(navnLower));
-          const isSp2 = sp2list.some(s => s.navn.toLowerCase().includes(navnLower));
+          const matchNavn = (navn) => {
+            const n = navn.toLowerCase();
+            const parts = navnFull.split(' ').filter(Boolean);
+            return parts.length >= 2
+              ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
+              : n.includes(navnFull);
+          };
+          const isSp1 = sp1list.some(s => matchNavn(s.navn));
+          const isSp2 = sp2list.some(s => matchNavn(s.navn));
           if (!isSp1 && !isSp2) continue;
 
           const motSpillere = isSp1 ? sp2list : sp1list;
