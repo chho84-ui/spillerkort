@@ -565,27 +565,35 @@ function visTurnering(t) {
         if (!kamper[ni].res) { var ntd = parseTid(kamper[ni].tid); if (ntd && ntd > nowT) { nextKampIdx = ni; break; } }
       }
 
-      // Bygg disc→regIdx-kart
+      // Bygg disc+ageGroup→regIdx-kart (skiller f.eks. U13 MD fra U15 MD)
       var discToRegIdx = {};
       for (var ri2 = 0; ri2 < t.registreringer.length; ri2++) {
         var rdc = discTilKode(t.registreringer[ri2].disiplin);
+        var rag = (t.registreringer[ri2].ageGroup || '').toUpperCase();
+        var fullKey = rdc + '|' + rag;
+        if (!(fullKey in discToRegIdx)) discToRegIdx[fullKey] = ri2;
+        // Fallback: bare disc-kode (for kamper uten ageGroup)
         if (!(rdc in discToRegIdx)) discToRegIdx[rdc] = ri2;
       }
 
-      // Grupper kamper etter disc (normaliser til kode for å unngå duplikater på f.eks. "U13 Mixed Damer" vs "U15 Mixed Damer")
+      // Grupper kamper etter disc+ageGroup-nøkkel
       var discGroups = {};
       for (var i = 0; i < kamper.length; i++) {
         var dc = discTilKode(kamper[i].disc) || kamper[i].disc || 'HS';
-        if (!discGroups[dc]) discGroups[dc] = [];
-        discGroups[dc].push(i); // index into sorted kamper
+        var ag = (kamper[i].ageGroup || '').toUpperCase();
+        var groupKey = dc + '|' + ag;
+        if (!discGroups[groupKey]) discGroups[groupKey] = [];
+        discGroups[groupKey].push(i);
       }
 
       // Render inn i riktig reg-slot (eller pastKl for avsluttede turneringer)
-      Object.keys(discGroups).forEach(function(dc) {
-        var regIdx = discToRegIdx[dc];
+      Object.keys(discGroups).forEach(function(groupKey) {
+        var dc = groupKey.split('|')[0];
+        // Prøv eksakt match (disc+ageGroup), fall tilbake til bare disc
+        var regIdx = (groupKey in discToRegIdx) ? discToRegIdx[groupKey] : discToRegIdx[dc];
         var kl = (regIdx !== undefined) ? document.getElementById('sk-kl-' + t.tournamentId + '-' + regIdx) : null;
         if (!kl && !pastKl) return;
-        var entries = discGroups[dc];
+        var entries = discGroups[groupKey];
         var kh = '';
         for (var j = 0; j < entries.length; j++) {
           var ki = entries[j];
@@ -610,7 +618,7 @@ function visTurnering(t) {
             + '</div>';
         }
         if (kl) {
-          kl.innerHTML = kh;
+          kl.innerHTML += kh;
           // Vis gruppe-knapp hvis vi har gruppedata for denne disiplinen
           if (data.grupper && data.grupper.length) {
             var g = null;
