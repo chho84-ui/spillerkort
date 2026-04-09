@@ -604,9 +604,11 @@ function visTurnering(t) {
           // Parser tid-streng: støtter "DD-MM HH:MM" (worker) og "HH:MM" (parseKamper)
           var tidDato = null, tidKl = '--:--';
           if (k.tid) {
-            var _tm = k.tid.match(/^(\d{2})-(\d{2}) (\d{2}:\d{2})$/);
+            // "DD-MM HH:MM" eller "DD-MM HH:MM:SS"
+            var _tm = k.tid.match(/^(\d{2})-(\d{2})\s+(\d{2}:\d{2})/);
             if (_tm) { tidDato = _tm[1] + '-' + _tm[2]; tidKl = _tm[3]; }
-            else if (/^\d{2}:\d{2}$/.test(k.tid)) { tidKl = k.tid; }
+            // "HH:MM" kun (fra HTML-parsing)
+            else if (/^\d{2}:\d{2}/.test(k.tid)) { tidKl = k.tid.substring(0, 5); }
           }
           // Dagseparator når datoen skifter
           if (tidDato && tidDato !== lastDag) {
