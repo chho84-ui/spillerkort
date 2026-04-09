@@ -601,18 +601,24 @@ function visTurnering(t) {
         for (var j = 0; j < entries.length; j++) {
           var ki = entries[j];
           var k = kamper[ki];
+          // Parser tid-streng: støtter "DD-MM HH:MM" (worker) og "HH:MM" (parseKamper)
+          var tidDato = null, tidKl = '--:--';
+          if (k.tid) {
+            var _tm = k.tid.match(/^(\d{2})-(\d{2}) (\d{2}:\d{2})$/);
+            if (_tm) { tidDato = _tm[1] + '-' + _tm[2]; tidKl = _tm[3]; }
+            else if (/^\d{2}:\d{2}$/.test(k.tid)) { tidKl = k.tid; }
+          }
           // Dagseparator når datoen skifter
-          var dagStr = k.tid ? k.tid.substring(0, 5) : null; // "DD-MM"
-          if (dagStr && dagStr !== lastDag) {
-            lastDag = dagStr;
-            var _dp = dagStr.split('-');
+          if (tidDato && tidDato !== lastDag) {
+            lastDag = tidDato;
+            var _dp = tidDato.split('-');
             var _d = parseInt(_dp[0]), _mo = parseInt(_dp[1]);
             var _dt = new Date(new Date().getFullYear(), _mo - 1, _d);
             var _dagNavn = _dager[_dt.getDay()] + ' ' + _d + '. ' + _mndK[_mo - 1];
             kh += '<div class="sk-dag-sep">' + _dagNavn + '</div>';
           }
           kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + '">'
-            + '<span class="sk-kamp-tid">' + (k.tid ? k.tid.substring(6) : '--:--') + '</span>'
+            + '<span class="sk-kamp-tid">' + tidKl + '</span>'
             + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
             + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
             + (function(kp, kpi) {
