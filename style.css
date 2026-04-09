@@ -41,6 +41,7 @@ body { background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, Roboto, 
 .sk-born-mini { font-size: 9px; color: #666; margin-left: 2px; vertical-align: middle; }
 .sk-kamp-next { background: rgba(127,255,212,.07); border-left: 2px solid #7fffd4; padding-left: 4px; border-radius: 0 4px 4px 0; }
 .sk-kamp-next .sk-kamp-tid { color: #7fffd4; }
+.sk-dag-sep { font-size: 10px; color: #888; text-transform: capitalize; padding: 5px 0 2px; border-top: 1px solid #1a1a3a; margin-top: 3px; letter-spacing: .3px; }
 .sk-disc-count { opacity: .55; font-weight: normal; font-size: 9px; margin-left: 5px; }
 .sk-mot-link { cursor: pointer; }
 .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
