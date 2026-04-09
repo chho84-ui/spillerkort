@@ -572,10 +572,10 @@ function visTurnering(t) {
         if (!(rdc in discToRegIdx)) discToRegIdx[rdc] = ri2;
       }
 
-      // Grupper kamper etter disc
+      // Grupper kamper etter disc (normaliser til kode for å unngå duplikater på f.eks. "U13 Mixed Damer" vs "U15 Mixed Damer")
       var discGroups = {};
       for (var i = 0; i < kamper.length; i++) {
-        var dc = kamper[i].disc || 'HS';
+        var dc = discTilKode(kamper[i].disc) || kamper[i].disc || 'HS';
         if (!discGroups[dc]) discGroups[dc] = [];
         discGroups[dc].push(i); // index into sorted kamper
       }
