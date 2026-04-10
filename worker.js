@@ -315,6 +315,7 @@ async function handleRequest(request, env) {
 
           // Resultat: match[3] = scoreStr "4/21 6/21"
           const scoreStr = String(match[3] || '').trim();
+          const vinner = match[5]; // 1=sp1 vant, 2=sp2 vant
           let res = '';
           if (scoreStr) {
             res = scoreStr.split(/\s+/).map(s => {
@@ -323,8 +324,9 @@ async function handleRequest(request, env) {
               return s;
             }).join(', ');
           }
+          const vant = vinner ? (isSp1 ? vinner === 1 : vinner === 2) : null;
 
-          kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res });
+          kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res, vant });
         }
 
         // Standings direkte fra pd.data[1]: [idx, ?, ?, ?, "pos", ["Navn, Klubb"], played, kV, kT, sV, sT, ...]
@@ -341,54 +343,45 @@ async function handleRequest(request, env) {
         if (spillereListe.length > 0) grupper.push({ disc: dc, ageGroup, spillere: spillereListe });
       }
 
-      // Sluttspill (knockout): hent p=1&g=-1
+      // Sluttspill (knockout): hent p=1 (uten g)
+      // Struktur: data[0]=tittel, data[1]=[[idx,?,pos,[navn]],...], data[2]=[[rundeId,[kamper]],...]
+      // Kamp: [bane, ?, "HH:MM DD-MM-YYYY", scoreStr, ?, vinner(1/2), [], [], sp1idx, sp2idx, ...]
       try {
-        const spJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=1&g=-1`, { headers: UA })).json();
-        if (Array.isArray(spJson.data)) {
-          // Bygg seedingsMap fra spJson.data[0]: [idx, ?, "pos", ["Navn, Klubb"]]
+        const spJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=1`, { headers: UA })).json();
+        if (Array.isArray(spJson.data) && spJson.data.length >= 3) {
+          // Bygg seedMap fra data[1]: [idx, ?, pos, ["Navn, Klubb"]]
           const seedMap = {};
-          for (const s of (spJson.data[0] || [])) {
+          for (const s of (spJson.data[1] || [])) {
             if (!Array.isArray(s)) continue;
             const idx = s[0];
             const navnArr = Array.isArray(s[3]) ? s[3].map(n => decEnt(String(n))) : [];
             if (navnArr.length) seedMap[idx] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
           }
 
-          // Sluttspill: data[2] = runder, data[2][r] = array av kamper
-          // Kamp-format varierer: match[6]/match[7] = [name,...] ELLER match[8]/match[9] = idx til seedMap
+          // data[2] = [[rundeId, [kamper]], ...]
           const runder = Array.isArray(spJson.data[2]) ? spJson.data[2] : [];
           for (const runde of runder) {
-            if (!Array.isArray(runde)) continue;
-            for (const match of runde) {
+            if (!Array.isArray(runde) || !Array.isArray(runde[1])) continue;
+            for (const match of runde[1]) {
               if (!Array.isArray(match)) continue;
-              // Prøv inline navn (match[6]/match[7]) først, fall tilbake til seedMap (match[8]/match[9])
-              let spiller1, spiller2;
-              if (Array.isArray(match[6]) && match[6].length && typeof match[6][0] === 'string') {
-                spiller1 = match[6].map(n => { const dn = decEnt(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1] || '').trim() }; });
-                spiller2 = (Array.isArray(match[7]) ? match[7] : []).map(n => { const dn = decEnt(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1] || '').trim() }; });
-              } else {
-                spiller1 = seedMap[match[8]] || [];
-                spiller2 = seedMap[match[9]] || [];
-              }
+              const spiller1 = seedMap[match[8]] || [];
+              const spiller2 = seedMap[match[9]] || [];
               const isSp1 = spiller1.some(s => matchNavn(s.navn));
               const isSp2 = spiller2.some(s => matchNavn(s.navn));
               if (!isSp1 && !isSp2) continue;
 
               const motSpillere = isSp1 ? spiller2 : spiller1;
-              // Hopp over kamper uten motspiller ennå (walkover/TBD)
               if (!motSpillere.length || !motSpillere[0].navn) continue;
               const mot = motSpillere.map(s => s.navn).join(' / ');
               const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
 
+              // Tid: "HH:MM DD-MM-YYYY"
               const rawTime = String(match[2] || '');
               const tp = rawTime.trim().split(/\s+/);
               let timeStr;
               if (tp.length >= 2) {
                 const p0 = tp[0], p1 = tp[1];
-                if (/^\d{4}-\d{2}-\d{2}$/.test(p0)) {
-                  const dp2 = p0.split('-');
-                  timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1.substring(0, 5);
-                } else if (/^\d{2}:\d{2}/.test(p0)) {
+                if (/^\d{2}:\d{2}/.test(p0)) {
                   timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5);
                 } else {
                   timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5);
@@ -398,7 +391,9 @@ async function handleRequest(request, env) {
               }
               const bane = String(match[0] || '');
 
+              // Score: "21/9 21/18" — vinner er match[5]: 1=sp1, 2=sp2
               const scoreStr = String(match[3] || '').trim();
+              const vinner = match[5]; // 1=sp1 vant, 2=sp2 vant
               let res = '';
               if (scoreStr) {
                 res = scoreStr.split(/\s+/).map(s => {
@@ -407,8 +402,9 @@ async function handleRequest(request, env) {
                   return s;
                 }).join(', ');
               }
+              const vant = vinner ? (isSp1 ? vinner === 1 : vinner === 2) : null;
 
-              kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res, sluttspill: true });
+              kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res, vant, sluttspill: true });
             }
           }
         }
