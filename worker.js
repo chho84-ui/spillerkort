@@ -109,14 +109,14 @@ async function handleRequest(request, env) {
     return json(result);
   }
 
-  if (path === '/cup2000debug_disabled') {
+  if (path === '/cup2000debug') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
-    const navnNorm2 = (body.tournamentNavn || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const navnNorm2 = (body.tournamentNavn || '').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
     let cup2000Id2 = null;
     const listHtml2 = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', { headers: { 'User-Agent': 'Mozilla/5.0' } })).text();
-    for (const m of listHtml2.matchAll(/tournamentid=(\d+)[^>]*>([^<]{2,60})<\/a>/g)) {
-      const rowName = m[2].toLowerCase().replace(/\s+/g, ' ').trim();
+    for (const m of listHtml2.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
+      const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
       if (rowName.includes(navnNorm2) || navnNorm2.includes(rowName.split(' ').slice(-3).join(' '))) { cup2000Id2 = m[1]; break; }
     }
     if (!cup2000Id2) return json({ error: 'Turnering ikke funnet', navnNorm: navnNorm2 });
@@ -142,16 +142,13 @@ async function handleRequest(request, env) {
     if (firstPuljeId) {
       pdRaw = await (await fetch(`${BASE3}?tournamentid=${cup2000Id2}&c=${firstClass.c}&e=${firstClass.e}&p=0&g=${firstPuljeId}`, { headers: UA3 })).json();
     }
+    const rawRounds = pdRaw && pdRaw.data && Array.isArray(pdRaw.data[2]) && Array.isArray(pdRaw.data[2][0]) ? pdRaw.data[2][0] : [];
     return json({
       cup2000Id: cup2000Id2,
-      classes: classes2.slice(0, 3),
       firstClass,
-      puljer: puljer2.slice(0, 3),
       pdDataLength: pdRaw && pdRaw.data ? pdRaw.data.length : null,
-      pdData0: pdRaw && pdRaw.data ? pdRaw.data[0] : null,
-      pdData3: pdRaw && pdRaw.data && pdRaw.data[3] ? pdRaw.data[3] : null,
-      pdData4: pdRaw && pdRaw.data && pdRaw.data[4] ? pdRaw.data[4] : null,
-      pdAllKeys: pdRaw ? Object.keys(pdRaw) : null
+      pdAllKeys: pdRaw ? Object.keys(pdRaw) : null,
+      rawMatches: rawRounds.slice(0, 3).map(m => Array.isArray(m) ? { len: m.length, m0: m[0], m2: m[2], m8: m[8], m9: m[9], m10: m[10], m11: m[11], m12: m[12] } : m)
     });
   }
 
@@ -260,8 +257,8 @@ async function handleRequest(request, env) {
         const pd = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=0&g=${puljeId}`, { headers: UA })).json();
         if (!Array.isArray(pd.data) || pd.data.length < 3) continue;
 
-        // pd.data[1] = spillere: [spillerIdx, ..., ..., ..., ..., [navn1, navn2?], ...]
-        // For doubles er s[5] = ["Sp1, Klubb", "Sp2, Klubb"]
+        // pd.data[1] = standings: [playerIdx, ?, ?, ?, "pos", ["Navn, Klubb"], played, kV, kT, sV, sT, pV, pT, pts]
+        // Bygg spillerMap fra standings for motstanderoppslag i kamper
         const spillerMap = {};
         for (const s of (pd.data[1] || [])) {
           const idx = s[0];
@@ -272,43 +269,21 @@ async function handleRequest(request, env) {
           }));
         }
 
-        // Bygg standings-map for alle spillere i pulja
-        const standings = {};
-        for (const [idx, arr] of Object.entries(spillerMap)) {
-          const navn = arr.map(s => s.navn).join(' / ');
-          const klubb = [...new Set(arr.map(s => s.klubb).filter(Boolean))].join(' / ');
-          standings[idx] = { navn, klubb, kV: 0, kT: 0, sV: 0, sT: 0 };
-        }
-
-        // pd.data[2][0] = kamparray: [bane, ?, tid, ?, ?, ?, [], [], p1idx, p2idx, res, ...]
+        // pd.data[2][0] = kamparray: [bane, ?, tid, scoreStr, ?, ?, [], [], p1idx, p2idx, ?, ...]
+        // scoreStr = "4/21 6/21" (mellomrom-separerte sett, slash mellom p1/p2)
         const rounds = Array.isArray(pd.data[2]) && Array.isArray(pd.data[2][0]) ? pd.data[2][0] : [];
+        const matchNavn = (navn) => {
+          const n = navn.toLowerCase();
+          const parts = navnFull.split(' ').filter(Boolean);
+          return parts.length >= 2
+            ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
+            : n.includes(navnFull);
+        };
         for (const match of rounds) {
           if (!Array.isArray(match)) continue;
           const p1idx = match[8], p2idx = match[9];
-
-          // Oppdater standings fra resultater (alle kamper i pulja)
-          const resRawS = match[10];
-          if (Array.isArray(resRawS) && resRawS.length >= 2) {
-            let p1s = 0, p2s = 0;
-            for (let i = 0; i + 1 < resRawS.length; i += 2) {
-              if (resRawS[i] == null) break;
-              if (resRawS[i] > resRawS[i + 1]) p1s++; else if (resRawS[i + 1] > resRawS[i]) p2s++;
-            }
-            if (p1s > 0 || p2s > 0) {
-              if (standings[p1idx]) { standings[p1idx].sV += p1s; standings[p1idx].sT += p2s; if (p1s > p2s) standings[p1idx].kV++; else standings[p1idx].kT++; }
-              if (standings[p2idx]) { standings[p2idx].sV += p2s; standings[p2idx].sT += p1s; if (p2s > p1s) standings[p2idx].kV++; else standings[p2idx].kT++; }
-            }
-          }
-
           const sp1list = spillerMap[p1idx] || [];
           const sp2list = spillerMap[p2idx] || [];
-          const matchNavn = (navn) => {
-            const n = navn.toLowerCase();
-            const parts = navnFull.split(' ').filter(Boolean);
-            return parts.length >= 2
-              ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
-              : n.includes(navnFull);
-          };
           const isSp1 = sp1list.some(s => matchNavn(s.navn));
           const isSp2 = sp2list.some(s => matchNavn(s.navn));
           if (!isSp1 && !isSp2) continue;
@@ -317,58 +292,52 @@ async function handleRequest(request, env) {
           const mot = motSpillere.map(s => s.navn).join(' / ');
           const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
 
+          // Tidsformat: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
           const rawTime = String(match[2] || '');
-          const tp = rawTime.split(' ');
+          const tp = rawTime.trim().split(/\s+/);
           let timeStr;
           if (tp.length >= 2) {
-            // cup2000 format varierer: "HH:MM DD-MM" eller "YYYY-MM-DD HH:MM:SS"
-            const p0 = tp[0], p1 = tp[1].substring(0, 5);
+            const p0 = tp[0], p1 = tp[1];
             if (/^\d{4}-\d{2}-\d{2}$/.test(p0)) {
-              // ISO: "YYYY-MM-DD" → "DD-MM HH:MM"
+              // ISO "YYYY-MM-DD HH:MM" → "DD-MM HH:MM"
               const dp2 = p0.split('-');
-              timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1;
+              timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1.substring(0, 5);
             } else if (/^\d{2}:\d{2}/.test(p0)) {
-              // "HH:MM DD-MM" → "DD-MM HH:MM"
-              timeStr = p1 + ' ' + p0.substring(0, 5);
+              // "HH:MM DD-MM-YYYY" eller "HH:MM DD-MM" → "DD-MM HH:MM"
+              timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5);
             } else {
-              // Allerede "DD-MM HH:MM"
-              timeStr = p0 + ' ' + p1;
+              timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5);
             }
           } else {
-            timeStr = tp[0];
+            timeStr = tp[0] || '';
           }
           const bane = String(match[0] || '');
 
-          // Resultat: match[10] = null eller sett-data
-          const resRaw = match[10];
+          // Resultat: match[3] = scoreStr "4/21 6/21"
+          const scoreStr = String(match[3] || '').trim();
           let res = '';
-          if (resRaw != null && typeof resRaw === 'object' && !Array.isArray(resRaw)) {
-            // noop
-          } else if (Array.isArray(resRaw)) {
-            const chunks = [];
-            for (let i = 0; i + 1 < resRaw.length; i += 2) {
-              if (resRaw[i] == null) break;
-              chunks.push(isSp1 ? `${resRaw[i]}-${resRaw[i+1]}` : `${resRaw[i+1]}-${resRaw[i]}`);
-            }
-            res = chunks.join(', ');
+          if (scoreStr) {
+            res = scoreStr.split(/\s+/).map(s => {
+              const pts = s.split('/');
+              if (pts.length === 2) return isSp1 ? `${pts[0]}-${pts[1]}` : `${pts[1]}-${pts[0]}`;
+              return s;
+            }).join(', ');
           }
 
           kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res });
         }
 
-        // Bygg sortert gruppestilling
+        // Standings direkte fra pd.data[1]: [idx, ?, ?, ?, "pos", ["Navn, Klubb"], played, kV, kT, sV, sT, ...]
         const navnParts = navnFull.split(' ').filter(Boolean);
-        const spillereListe = Object.values(standings).sort((a, b) => {
-          if (b.kV !== a.kV) return b.kV - a.kV;
-          const ar = a.sT ? a.sV / a.sT : a.sV, br = b.sT ? b.sV / b.sT : b.sV;
-          return br - ar;
-        }).map((s, i) => ({
-          pos: i + 1, navn: s.navn, klubb: s.klubb,
-          kV: s.kV, kT: s.kT, sV: s.sV, sT: s.sT,
-          erMeg: navnParts.length >= 2
-            ? s.navn.toLowerCase().includes(navnParts[0].toLowerCase()) && s.navn.toLowerCase().includes(navnParts[navnParts.length - 1].toLowerCase())
-            : s.navn.toLowerCase().includes(navnFull.toLowerCase())
-        }));
+        const spillereListe = (pd.data[1] || []).map(s => {
+          const navnStr = Array.isArray(s[5]) && s[5][0] ? decEnt(String(s[5][0])) : '';
+          const navn = navnStr.split(',')[0].trim();
+          const klubb = (navnStr.split(',')[1] || '').trim();
+          const erMeg = navnParts.length >= 2
+            ? navnStr.toLowerCase().includes(navnParts[0].toLowerCase()) && navnStr.toLowerCase().includes(navnParts[navnParts.length - 1].toLowerCase())
+            : navnStr.toLowerCase().includes(navnFull.toLowerCase());
+          return { pos: parseInt(s[4]) || 0, navn, klubb, kV: s[7] || 0, kT: s[8] || 0, sV: s[9] || 0, sT: s[10] || 0, erMeg };
+        }).sort((a, b) => a.pos - b.pos);
         if (spillereListe.length > 0) grupper.push({ disc: dc, ageGroup, spillere: spillereListe });
       }
       return { kamper, grupper };
