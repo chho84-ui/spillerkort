@@ -248,7 +248,14 @@ async function handleRequest(request, env) {
         });
         if (harSpiller) minePuljer.push(puljeId);
       }
-      if (!minePuljer.length) return { kamper: [], grupper: [] };
+
+      const matchNavn = (navn) => {
+        const n = navn.toLowerCase();
+        const parts = navnFull.split(' ').filter(Boolean);
+        return parts.length >= 2
+          ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
+          : n.includes(navnFull);
+      };
 
       // Hent kamper og gruppestandings for hver pulje
       const kamper = [];
@@ -272,13 +279,6 @@ async function handleRequest(request, env) {
         // pd.data[2][0] = kamparray: [bane, ?, tid, scoreStr, ?, ?, [], [], p1idx, p2idx, ?, ...]
         // scoreStr = "4/21 6/21" (mellomrom-separerte sett, slash mellom p1/p2)
         const rounds = Array.isArray(pd.data[2]) && Array.isArray(pd.data[2][0]) ? pd.data[2][0] : [];
-        const matchNavn = (navn) => {
-          const n = navn.toLowerCase();
-          const parts = navnFull.split(' ').filter(Boolean);
-          return parts.length >= 2
-            ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
-            : n.includes(navnFull);
-        };
         for (const match of rounds) {
           if (!Array.isArray(match)) continue;
           const p1idx = match[8], p2idx = match[9];
@@ -340,6 +340,80 @@ async function handleRequest(request, env) {
         }).sort((a, b) => a.pos - b.pos);
         if (spillereListe.length > 0) grupper.push({ disc: dc, ageGroup, spillere: spillereListe });
       }
+
+      // Sluttspill (knockout): hent p=1&g=-1
+      try {
+        const spJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=1&g=-1`, { headers: UA })).json();
+        if (Array.isArray(spJson.data)) {
+          // Bygg seedingsMap fra spJson.data[0]: [idx, ?, "pos", ["Navn, Klubb"]]
+          const seedMap = {};
+          for (const s of (spJson.data[0] || [])) {
+            if (!Array.isArray(s)) continue;
+            const idx = s[0];
+            const navnArr = Array.isArray(s[3]) ? s[3].map(n => decEnt(String(n))) : [];
+            if (navnArr.length) seedMap[idx] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
+          }
+
+          // Sluttspill: data[2] = runder, data[2][r] = array av kamper
+          // Kamp-format varierer: match[6]/match[7] = [name,...] ELLER match[8]/match[9] = idx til seedMap
+          const runder = Array.isArray(spJson.data[2]) ? spJson.data[2] : [];
+          for (const runde of runder) {
+            if (!Array.isArray(runde)) continue;
+            for (const match of runde) {
+              if (!Array.isArray(match)) continue;
+              // Prøv inline navn (match[6]/match[7]) først, fall tilbake til seedMap (match[8]/match[9])
+              let spiller1, spiller2;
+              if (Array.isArray(match[6]) && match[6].length && typeof match[6][0] === 'string') {
+                spiller1 = match[6].map(n => { const dn = decEnt(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1] || '').trim() }; });
+                spiller2 = (Array.isArray(match[7]) ? match[7] : []).map(n => { const dn = decEnt(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1] || '').trim() }; });
+              } else {
+                spiller1 = seedMap[match[8]] || [];
+                spiller2 = seedMap[match[9]] || [];
+              }
+              const isSp1 = spiller1.some(s => matchNavn(s.navn));
+              const isSp2 = spiller2.some(s => matchNavn(s.navn));
+              if (!isSp1 && !isSp2) continue;
+
+              const motSpillere = isSp1 ? spiller2 : spiller1;
+              // Hopp over kamper uten motspiller ennå (walkover/TBD)
+              if (!motSpillere.length || !motSpillere[0].navn) continue;
+              const mot = motSpillere.map(s => s.navn).join(' / ');
+              const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+
+              const rawTime = String(match[2] || '');
+              const tp = rawTime.trim().split(/\s+/);
+              let timeStr;
+              if (tp.length >= 2) {
+                const p0 = tp[0], p1 = tp[1];
+                if (/^\d{4}-\d{2}-\d{2}$/.test(p0)) {
+                  const dp2 = p0.split('-');
+                  timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1.substring(0, 5);
+                } else if (/^\d{2}:\d{2}/.test(p0)) {
+                  timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5);
+                } else {
+                  timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5);
+                }
+              } else {
+                timeStr = tp[0] || '';
+              }
+              const bane = String(match[0] || '');
+
+              const scoreStr = String(match[3] || '').trim();
+              let res = '';
+              if (scoreStr) {
+                res = scoreStr.split(/\s+/).map(s => {
+                  const pts = s.split('/');
+                  if (pts.length === 2) return isSp1 ? `${pts[0]}-${pts[1]}` : `${pts[1]}-${pts[0]}`;
+                  return s;
+                }).join(', ');
+              }
+
+              kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res, sluttspill: true });
+            }
+          }
+        }
+      } catch(e) { /* sluttspill ikke tilgjengelig */ }
+
       return { kamper, grupper };
     };
 
