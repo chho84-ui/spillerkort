@@ -606,7 +606,7 @@ function visTurnering(t) {
         var kh = '';
         var _dager = ['søn','man','tir','ons','tor','fre','lør'];
         var _mndK = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
-        var lastDag = null;
+        var lastDag = null, visteSluttspill = false;
         for (var j = 0; j < entries.length; j++) {
           var ki = entries[j];
           var k = kamper[ki];
@@ -622,6 +622,11 @@ function visTurnering(t) {
             // "HH:MM" kun (fra HTML-parsing)
             else if (/^\d{2}:\d{2}/.test(k.tid)) { tidKl = k.tid.substring(0, 5); } }
           }
+          // Sluttspill-separator (vises én gang før første sluttspill-kamp)
+          if (k.sluttspill && !visteSluttspill) {
+            visteSluttspill = true;
+            kh += '<div class="sk-dag-sep sk-dag-sep-sluttspill">Sluttspill</div>';
+          }
           // Dagseparator når datoen skifter
           if (tidDato && tidDato !== lastDag) {
             lastDag = tidDato;
@@ -631,7 +636,7 @@ function visTurnering(t) {
             var _dagNavn = _dager[_dt.getDay()] + ' ' + _d + '. ' + _mndK[_mo - 1];
             kh += '<div class="sk-dag-sep">' + _dagNavn + '</div>';
           }
-          kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + '">'
+          kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + (k.sluttspill ? ' sk-kamp-sluttspill' : '') + '">'
             + '<span class="sk-kamp-tid">' + tidKl + '</span>'
             + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
             + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
