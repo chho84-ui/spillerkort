@@ -229,7 +229,7 @@ async function handleRequest(request, env) {
     // Steg 3: Per klasse — finn spillerens puljer, hent kamper per pulje
     const fetchClass = async ({ c, e, disc, ageGroup }) => {
       const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
-      if (!Array.isArray(d.data)) return [];
+      if (!Array.isArray(d.data)) return { kamper: [], grupper: [] };
       const puljer = d.data[0] && Array.isArray(d.data[0][3]) ? d.data[0][3] : [];
       const dc = discCode(disc);
 
@@ -251,7 +251,7 @@ async function handleRequest(request, env) {
         });
         if (harSpiller) minePuljer.push(puljeId);
       }
-      if (!minePuljer.length) return [];
+      if (!minePuljer.length) return { kamper: [], grupper: [] };
 
       // Hent kamper og gruppestandings for hver pulje
       const kamper = [];
