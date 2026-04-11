@@ -475,7 +475,7 @@ function visTurnering(t) {
   var _mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
   var _dp = (t.dato || '').split('.');
   var _turDato = t.dager ? t.dager.replace(/\.\s*$/, '') + '. ' + (_dp[1] ? _mnd[parseInt(_dp[1])-1] : '') + (_dp[2] ? ' ' + _dp[2] : '') : (t.dato || '');
-  var liveKnappHtml = t.cup2000Url ? ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + (t.navn||'').replace(/'/g,"\\'") + '\')">📋 Live</button>' : '';
+  var liveKnappHtml = ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + (t.navn||'').replace(/'/g,"\\'") + '\')">📋 Live</button>';
   sec.innerHTML = '<div class="sk-sek-banner"><h3>' + _turDato + ' \u2014 ' + (t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
   res.appendChild(sec);
   var div = document.createElement('div');
