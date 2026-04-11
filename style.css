@@ -71,6 +71,8 @@ body { background: #1a1a2e; color: #e0e0e0; font-family: -apple-system, Roboto, 
 .sk-gruppe-tabell tr.meg td { background: rgba(83,216,251,.08); color: #53d8fb; font-weight: bold; }
 .sk-gruppe-tabell .pos { color: #555; width: 20px; }
 .sk-gruppe-tabell .score { color: #7fffd4; text-align: right; white-space: nowrap; }
+.sk-live-refresh-btn { background: none; border: 1px solid #1a3a6a; color: #53d8fb; border-radius: 4px; padding: 2px 8px; font-size: 15px; cursor: pointer; margin-right: 6px; }
+.sk-live-refresh-btn:disabled { opacity: .4; }
 .sk-live-btn { background: #0f3460; border: 1px solid #1a4a8a; color: #53d8fb; border-radius: 4px; padding: 2px 9px; font-size: 11px; cursor: pointer; white-space: nowrap; margin-left: 6px; flex-shrink: 0; }
 .sk-live-btn:active { background: #1a4a8a; }
 .sk-live-panel { max-height: 80vh; }
