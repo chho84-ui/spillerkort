@@ -358,11 +358,12 @@ async function handleRequest(request, env) {
             if (navnArr.length) seedMap[idx] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
           }
 
-          // data[2] = [[rundeId, [kamper]], ...]
+          // data[2] = [[rundeId, [[kamp1,kamp2,...], null]], ...]
           const runder = Array.isArray(spJson.data[2]) ? spJson.data[2] : [];
           for (const runde of runder) {
             if (!Array.isArray(runde) || !Array.isArray(runde[1])) continue;
-            for (const match of runde[1]) {
+            const kampliste = Array.isArray(runde[1][0]) ? runde[1][0] : runde[1];
+            for (const match of kampliste) {
               if (!Array.isArray(match)) continue;
               const spiller1 = seedMap[match[8]] || [];
               const spiller2 = seedMap[match[9]] || [];
