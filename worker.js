@@ -442,41 +442,54 @@ async function handleRequest(request, env) {
     const BASE2 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA2 = { 'User-Agent': 'Mozilla/5.0' };
 
-    // Hent pågående kamper via o=1
-    const liveJson = await (await fetch(`${BASE2}?tournamentid=${cup2000Id}&o=1`, { headers: UA2 })).json();
-    const courts2 = Array.isArray(liveJson.data) ? (liveJson.data[3] || []) : [];
+    // w=1 gir "Næste kampe": alle kommende + pågående kamper med live score
+    const liveJson = await (await fetch(`${BASE2}?tournamentid=${cup2000Id}&w=1`, { headers: UA2 })).json();
+    // data[3][0] = flat liste av alle kamper
+    const rawKamper = Array.isArray(liveJson.data) && Array.isArray(liveJson.data[3]) && Array.isArray(liveJson.data[3][0])
+      ? liveJson.data[3][0] : [];
 
     const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
     function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
     function decEnt2(s) { return s.replace(/&#(\d+);/g, (_,n) => String.fromCharCode(Number(n))); }
 
-    const navnLow2 = (body.navn || '').split(' ').pop().toLowerCase();
+    const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
 
     const kamper2 = [];
-    for (const court of courts2) {
-      if (!Array.isArray(court)) continue;
-      for (const match of court) {
-        if (!Array.isArray(match)) continue;
-        const sp1raw = Array.isArray(match[6]) ? match[6] : [];
-        const sp2raw = Array.isArray(match[7]) ? match[7] : [];
-        const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
-        const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
-        const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
-        const mine = allNames.some(n => n.includes(navnLow2));
-        const discFull = String(match[4] || '');
-        const dc = discCode2(discFull);
-        const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
-        const ageGroup = ageGroupM ? ageGroupM[0].toUpperCase() : '';
-        const rawTime = String(match[2] || '');
-        const tp = rawTime.split(' ');
-        const tid = tp.length >= 2 ? tp[1].substring(0,5) + ' ' + tp[0] : tp[0];
-        const sets = Array.isArray(match[10]) ? match[10] : [];
-        const res1 = sets[0] != null ? String(sets[0]) : '';
-        const res2 = sets[1] != null ? String(sets[1]) : '';
-        kamper2.push({ tid, bane: String(match[0] || ''), disc: dc, ageGroup, spiller1, spiller2, res1, res2, mine });
+    for (const match of rawKamper) {
+      if (!Array.isArray(match)) continue;
+      const sp1raw = Array.isArray(match[6]) ? match[6] : [];
+      const sp2raw = Array.isArray(match[7]) ? match[7] : [];
+      const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+      const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+      const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
+      const mine = navnDeler.length >= 2
+        ? allNames.some(n => navnDeler.every(del => n.includes(del)))
+        : allNames.some(n => n.includes(navnDeler[0] || ''));
+      const discFull = decEnt2(String(match[4] || ''));
+      const dc = discCode2(discFull);
+      const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
+      const ageGroup = ageGroupM ? ageGroupM[0].toUpperCase() : '';
+      // Tid: "HH:MM DD-MM-YYYY"
+      const rawTime = String(match[2] || '');
+      const tp = rawTime.trim().split(/\s+/);
+      const tid = tp.length >= 2 && /^\d{2}:\d{2}/.test(tp[0]) ? tp[1].substring(0,5) + ' ' + tp[0].substring(0,5) : (tp[0] || '');
+      // Status: match[3] = "NÆSTE KAMP" / "Antal kampe før: N" / ""
+      const statusRaw = decEnt2(String(match[3] || '')).trim();
+      let status; // 'live' | 'next' | number (kamper igjen)
+      if (!statusRaw || statusRaw === 'NÆSTE KAMP') {
+        status = statusRaw === 'NÆSTE KAMP' ? 'next' : 'live';
+      } else {
+        const foerM = statusRaw.match(/(\d+)/);
+        status = foerM ? parseInt(foerM[1]) : statusRaw;
       }
+      // Live score: match[10] = [set1sp1, set1sp2, set2sp1, set2sp2, ...]
+      const sets = Array.isArray(match[10]) ? match[10] : [];
+      const score = [];
+      for (let i = 0; i + 1 < sets.length; i += 2) {
+        if (sets[i] != null && sets[i+1] != null) score.push([sets[i], sets[i+1]]);
+      }
+      kamper2.push({ tid, bane: String(match[0] || ''), disc: dc, discFull, ageGroup, spiller1, spiller2, score, status, mine });
     }
-    kamper2.sort((a,b) => (a.tid||'').localeCompare(b.tid||''));
     return json({ kamper: kamper2 });
   }
 
