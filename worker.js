@@ -332,12 +332,14 @@ async function handleRequest(request, env) {
         // Standings direkte fra pd.data[1]: [idx, ?, ?, ?, "pos", ["Navn, Klubb"], played, kV, kT, sV, sT, ...]
         const navnParts = navnFull.split(' ').filter(Boolean);
         const spillereListe = (pd.data[1] || []).map(s => {
-          const navnStr = Array.isArray(s[5]) && s[5][0] ? decEnt(String(s[5][0])) : '';
-          const navn = navnStr.split(',')[0].trim();
-          const klubb = (navnStr.split(',')[1] || '').trim();
-          const erMeg = navnParts.length >= 2
-            ? navnStr.toLowerCase().includes(navnParts[0].toLowerCase()) && navnStr.toLowerCase().includes(navnParts[navnParts.length - 1].toLowerCase())
-            : navnStr.toLowerCase().includes(navnFull.toLowerCase());
+          // s[5] kan ha flere navn for doubles/mix: ["Sp1, Klubb", "Sp2, Klubb"]
+          const navnArr = Array.isArray(s[5]) ? s[5].map(n => decEnt(String(n))) : [];
+          const navn = navnArr.map(n => n.split(',')[0].trim()).join(' / ');
+          const klubbArr = [...new Set(navnArr.map(n => (n.split(',')[1] || '').trim()).filter(Boolean))];
+          const klubb = klubbArr.join(' / ');
+          const erMeg = navnArr.some(n => navnParts.length >= 2
+            ? n.toLowerCase().includes(navnParts[0].toLowerCase()) && n.toLowerCase().includes(navnParts[navnParts.length - 1].toLowerCase())
+            : n.toLowerCase().includes(navnFull.toLowerCase()));
           return { pos: parseInt(s[4]) || 0, navn, klubb, kV: s[7] || 0, kT: s[8] || 0, sV: s[9] || 0, sT: s[10] || 0, erMeg };
         }).sort((a, b) => a.pos - b.pos);
         if (spillereListe.length > 0) grupper.push({ disc: dc, ageGroup, spillere: spillereListe });
