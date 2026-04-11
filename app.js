@@ -475,7 +475,8 @@ function visTurnering(t) {
   var _mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
   var _dp = (t.dato || '').split('.');
   var _turDato = t.dager ? t.dager.replace(/\.\s*$/, '') + '. ' + (_dp[1] ? _mnd[parseInt(_dp[1])-1] : '') + (_dp[2] ? ' ' + _dp[2] : '') : (t.dato || '');
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + _turDato + ' \u2014 ' + (t.navn || 'Turnering') + '</h3></div>';
+  var liveKnappHtml = t.cup2000Url ? ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + (t.navn||'').replace(/'/g,"\\'") + '\')">📋 Live</button>' : '';
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + _turDato + ' \u2014 ' + (t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
@@ -889,6 +890,129 @@ function visGruppe(g) {
 
 function lukkGruppe() {
   var el = document.getElementById('sk-gruppe-overlay');
+  if (el) el.remove();
+}
+
+var LIVE_TTL = 30 * 1000; // 30 sek cache for live-data
+function cup2000LiveApi(tournamentNavn) {
+  var key = 'live:' + tournamentNavn;
+  var e = _cache[key];
+  if (e && (Date.now() - e.ts < LIVE_TTL)) return Promise.resolve(e.val);
+  return fetch(PROXY + '/cup2000live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK })
+  }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
+}
+
+function visLive(tournamentId, tournamentNavn) {
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-live-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkLive(); };
+
+  overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">📋 Kamper nå — ' + tournamentNavn + '</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkLive()">✕</button>'
+    + '</div>'
+    + '<div id="sk-live-innhold" style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  function renderLive(data) {
+    var kamper = data && data.kamper ? data.kamper : [];
+    if (!kamper.length) {
+      document.getElementById('sk-live-innhold').innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen kamper tilgjengelig</div>';
+      return;
+    }
+
+    // Grupper etter bane
+    var baneMap = {};
+    var baneRekkefølge = [];
+    for (var i = 0; i < kamper.length; i++) {
+      var k = kamper[i];
+      var b = String(k.bane || '?');
+      if (!baneMap[b]) { baneMap[b] = []; baneRekkefølge.push(b); }
+      baneMap[b].push(k);
+    }
+
+    var html = '';
+    for (var bi = 0; bi < baneRekkefølge.length; bi++) {
+      var bane = baneRekkefølge[bi];
+      var baneKamper = baneMap[bane];
+      html += '<div class="sk-live-bane">'
+        + '<div class="sk-live-bane-hdr">Bane ' + bane + '</div>';
+
+      for (var ki = 0; ki < baneKamper.length; ki++) {
+        var k2 = baneKamper[ki];
+        var isNext = k2.status === 'next';
+        var isLive = k2.status === 'live';
+        var foerAntall = typeof k2.status === 'number' ? k2.status : null;
+        var isMine = k2.mine;
+
+        var statusHtml = '';
+        if (isLive) statusHtml = '<span class="sk-live-status-live">● LIVE</span>';
+        else if (isNext) statusHtml = '<span class="sk-live-status-next">NESTE</span>';
+        else if (foerAntall !== null) statusHtml = '<span class="sk-live-status-kø">' + foerAntall + ' før</span>';
+
+        // Score
+        var scoreHtml = '';
+        if (k2.score && k2.score.length) {
+          scoreHtml = '<div class="sk-live-score">'
+            + k2.score.map(function(s) { return '<span>' + s[0] + '<em>–</em>' + s[1] + '</span>'; }).join(' ')
+            + '</div>';
+        }
+
+        // Spillernavn
+        var sp1 = (k2.spiller1 || []).map(function(s) { return s.navn; }).join(' / ');
+        var sp2 = (k2.spiller2 || []).map(function(s) { return s.navn; }).join(' / ');
+
+        html += '<div class="sk-live-kamp' + (isMine ? ' sk-live-kamp-mine' : '') + (isLive ? ' sk-live-kamp-live' : '') + '">'
+          + '<div class="sk-live-kamp-top">'
+          + '<span class="sk-live-disc">' + (k2.disc || '') + ' ' + (k2.ageGroup || '') + '</span>'
+          + statusHtml
+          + '<span class="sk-live-tid">' + (k2.tid ? k2.tid.substring(0,5) : '') + '</span>'
+          + '</div>'
+          + '<div class="sk-live-sp' + (isMine ? ' sk-live-sp-mine' : '') + '">' + sp1 + '</div>'
+          + '<div class="sk-live-vs">vs</div>'
+          + '<div class="sk-live-sp">' + sp2 + '</div>'
+          + scoreHtml
+          + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // Legg til oppdater-knapp
+    html += '<button class="sk-gruppe-btn" style="margin-top:12px" onclick="oppdaterLive(\'' + tournamentNavn.replace(/'/g, "\\'") + '\')">↻ Oppdater</button>';
+
+    var innhold = document.getElementById('sk-live-innhold');
+    if (innhold) innhold.innerHTML = html;
+  }
+
+  cup2000LiveApi(tournamentNavn).then(renderLive).catch(function() {
+    var innhold = document.getElementById('sk-live-innhold');
+    if (innhold) innhold.innerHTML = '<div style="color:#e94560;font-size:12px;text-align:center;padding:16px">Kunne ikke hente data</div>';
+  });
+}
+
+function oppdaterLive(tournamentNavn) {
+  // Tøm cache og last på nytt
+  delete _cache['live:' + tournamentNavn];
+  var innhold = document.getElementById('sk-live-innhold');
+  if (innhold) innhold.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>';
+  cup2000LiveApi(tournamentNavn).then(function(data) {
+    var overlay = document.getElementById('sk-live-overlay');
+    if (!overlay) return;
+    // Gjenbruk visLive sin renderLive — enklest å bare lukke og åpne på nytt
+    lukkLive();
+    // Finn tournamentId fra knappen — ikke nødvendig, bruk tournamentNavn direkte
+    visLive('', tournamentNavn);
+  });
+}
+
+function lukkLive() {
+  var el = document.getElementById('sk-live-overlay');
   if (el) el.remove();
 }
 
