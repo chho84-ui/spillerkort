@@ -551,6 +551,60 @@ function visTurnering(t) {
           if (div.parentNode) div.parentNode.removeChild(div);
           return;
         }
+        if (t.isPast && t.klasser && t.klasser.length) {
+          // Ingen cup2000-kamper, men turneringen er ferdig — hent resultater fra badmintonportalen
+          var pastKlEl = document.getElementById('sk-kl-past-' + t.tournamentId);
+          if (pastKlEl) pastKlEl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center;padding:2px 0">Henter resultater...</div>';
+          Promise.all(t.klasser.map(function(kl) {
+            return api('SearchTournamentResults', {
+              tournamentclassid: parseInt(kl.id),
+              clientselectfunction: 'SelectTournamentClass1'
+            }).then(function(res) {
+              var html = String((res.d && res.d.Html) || '');
+              if (!html) return null;
+              var doc2 = new DOMParser().parseFromString(html, 'text/html');
+              var h2s = doc2.querySelectorAll('h2');
+              var resultatBlokker = [];
+              h2s.forEach(function(h2) {
+                var table = h2.nextElementSibling;
+                while (table && table.tagName !== 'TABLE') table = table.nextElementSibling;
+                if (!table) return;
+                var rows = table.querySelectorAll('tr:not(.headrow)');
+                var sistePlass = '';
+                rows.forEach(function(row) {
+                  var playerCell = row.querySelector('td.player');
+                  var rankCell = row.querySelector('td.rank');
+                  var pointsCell = row.querySelector('td.points');
+                  if (!playerCell) return;
+                  var rankTekst = rankCell ? rankCell.textContent.trim() : '';
+                  if (rankTekst) sistePlass = rankTekst;
+                  var playerText = playerCell.textContent || '';
+                  if (playerText.toLowerCase().indexOf(SN.toLowerCase().split(' ')[0]) === -1) return;
+                  var poeng = pointsCell ? pointsCell.textContent.trim() : '';
+                  var disc = h2.textContent.trim();
+                  resultatBlokker.push({ disc: disc, plass: sistePlass, poeng: poeng });
+                });
+              });
+              return resultatBlokker.length ? resultatBlokker : null;
+            }).catch(function() { return null; });
+          })).then(function(alleResultater) {
+            var el = document.getElementById('sk-kl-past-' + t.tournamentId);
+            if (!el) return;
+            var alle = [];
+            alleResultater.forEach(function(r) { if (r) r.forEach(function(b) { alle.push(b); }); });
+            if (!alle.length) { el.innerHTML = ''; return; }
+            var rh = '<div style="font-size:10px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Resultater</div>';
+            alle.forEach(function(b) {
+              rh += '<div class="sk-row">'
+                + '<span class="sk-disc">' + b.disc + '</span>'
+                + '<span style="margin-left:8px;color:#7fffd4;font-weight:bold">' + (b.plass ? '#' + b.plass : '') + '</span>'
+                + (b.poeng ? '<span style="margin-left:6px;font-size:11px;color:#aaa">' + b.poeng + 'p</span>' : '')
+                + '</div>';
+            });
+            el.innerHTML = rh;
+          });
+          return;
+        }
         var vBtn = document.createElement('button');
         vBtn.className = 'sk-varsle-mini';
         vBtn.textContent = '\uD83D\uDD14 Varsle meg';
