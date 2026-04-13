@@ -698,15 +698,15 @@ function visTurnering(t) {
             + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
             + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
             + (function(kp, kpi) {
+                if ((kp.mot || '').indexOf('Vinner av ') === 0) {
+                  return '<span style="font-size:11px;color:#888;font-style:italic">' + kp.mot + '</span>';
+                }
                 var spillere = kp.motSpillere && kp.motSpillere.length > 1 ? kp.motSpillere : null;
                 if (spillere) {
                   return spillere.map(function(s, si) {
                     return '<span id="sk-mot-' + t.tournamentId + '-' + kpi + '-p' + si
                       + '" class="sk-mot-link" onclick="aapneMotstander(\'' + s.navn.replace(/'/g, "\\'") + '\',\'' + (s.klubb||'').replace(/'/g, "\\'") + '\')">' + s.navn + '</span>';
                   }).join(' ');
-                }
-                if ((kp.mot || '').indexOf('Vinner av ') === 0) {
-                  return '<span style="font-size:11px;color:#888;font-style:italic">' + kp.mot + '</span>';
                 }
                 return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + (kp.mot||'').replace(/'/g, "\\'") + '\',\'' + (kp.motKlubb||'').replace(/'/g, "\\'") + '\')">' + (kp.mot || '') + '</span>';
               })(k, ki)
