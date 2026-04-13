@@ -132,7 +132,7 @@ async function handleRequest(request, env) {
         }
       }
     }
-    if (!classes2.length) return json({ cup2000Id: cup2000Id2, error: 'Ingen klasser' });
+    if (!classes2.length) return json({ error: 'Turnering ikke funnet', navnNorm: navnNorm2 });
     // Hent raw data for første klasse + første pulje
     const firstClass = classes2[0];
     const d2 = await (await fetch(`${BASE3}?tournamentid=${cup2000Id2}&c=${firstClass.c}&e=${firstClass.e}`, { headers: UA3 })).json();
@@ -227,8 +227,68 @@ async function handleRequest(request, env) {
     const fetchClass = async ({ c, e, disc, ageGroup }) => {
       const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
       if (!Array.isArray(d.data)) return { kamper: [], grupper: [] };
-      const puljer = d.data[0] && Array.isArray(d.data[0][3]) ? d.data[0][3] : [];
       const dc = discCode(disc);
+
+      // Sjekk om dette er direkte sluttspill-struktur (data[0] er string = tittel)
+      // I stedet for gruppespill (data[0] er array med puljer)
+      if (typeof d.data[0] === 'string') {
+        // Direkte sluttspill: behandle d.data som spJson.data
+        const kamper = [];
+        const matchNavn2 = (navn) => {
+          const n = navn.toLowerCase();
+          const parts = navnFull.split(' ').filter(Boolean);
+          return parts.length >= 2
+            ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
+            : n.includes(navnFull);
+        };
+        const seedMap2 = {};
+        for (const s of (d.data[1] || [])) {
+          if (!Array.isArray(s)) continue;
+          const idx = s[0];
+          const navnArr = Array.isArray(s[3]) ? s[3].map(n => decEnt(String(n))) : [];
+          if (navnArr.length) seedMap2[idx] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
+        }
+        const runder2 = Array.isArray(d.data[2]) ? d.data[2] : [];
+        for (const runde of runder2) {
+          if (!Array.isArray(runde) || !Array.isArray(runde[1])) continue;
+          const kampliste = Array.isArray(runde[1][0]) ? runde[1][0] : runde[1];
+          for (const match of kampliste) {
+            if (!Array.isArray(match)) continue;
+            const spiller1 = seedMap2[match[8]] || [];
+            const spiller2 = seedMap2[match[9]] || [];
+            const isSp1 = spiller1.some(s => matchNavn2(s.navn));
+            const isSp2 = spiller2.some(s => matchNavn2(s.navn));
+            if (!isSp1 && !isSp2) continue;
+            const motSpillere = isSp1 ? spiller2 : spiller1;
+            if (!motSpillere.length) continue;
+            const mot = motSpillere.map(s => s.navn).join(' / ');
+            const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+            const rawTime = String(match[2] || '');
+            const tp = rawTime.trim().split(/\s+/);
+            let timeStr;
+            if (tp.length >= 2) {
+              const p0 = tp[0], p1 = tp[1];
+              if (/^\d{2}:\d{2}/.test(p0)) { timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5); }
+              else { timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5); }
+            } else { timeStr = tp[0] || ''; }
+            const bane = String(match[0] || '');
+            const scoreStr = String(match[3] || '').trim();
+            const vinner = match[5];
+            let res = '';
+            if (scoreStr) {
+              res = scoreStr.split(/\s+/).map(s => {
+                const pts = s.split('/');
+                return pts.length === 2 ? (isSp1 ? `${pts[0]}-${pts[1]}` : `${pts[1]}-${pts[0]}`) : s;
+              }).join(', ');
+            }
+            const vant = vinner ? (isSp1 ? vinner === 1 : vinner === 2) : null;
+            kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res, vant, sluttspill: true });
+          }
+        }
+        return { kamper, grupper: [] };
+      }
+
+      const puljer = d.data[0] && Array.isArray(d.data[0][3]) ? d.data[0][3] : [];
 
       // Finn puljer der spilleren er med
       const minePuljer = [];
