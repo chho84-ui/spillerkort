@@ -112,44 +112,23 @@ async function handleRequest(request, env) {
   if (path === '/cup2000debug') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
-    const navnNorm2 = (body.tournamentNavn || '').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
-    let cup2000Id2 = null;
-    const listHtml2 = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', { headers: { 'User-Agent': 'Mozilla/5.0' } })).text();
-    for (const m of listHtml2.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
-      const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
-      if (rowName.includes(navnNorm2) || navnNorm2.includes(rowName.split(' ').slice(-3).join(' '))) { cup2000Id2 = m[1]; break; }
-    }
-    if (!cup2000Id2) return json({ error: 'Turnering ikke funnet', navnNorm: navnNorm2 });
-    const BASE3 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
-    const UA3 = { 'User-Agent': 'Mozilla/5.0' };
-    const navJson2 = await (await fetch(`${BASE3}?tournamentid=${cup2000Id2}&c=0`, { headers: UA3 })).json();
-    const classes2 = [];
-    if (Array.isArray(navJson2.data)) {
-      for (const cat of navJson2.data) {
-        if (!Array.isArray(cat)) continue;
-        for (const cl of cat) {
-          if (Array.isArray(cl) && cl[0] && cl[1]) classes2.push({ c: cl[0], e: cl[1], disc: String(cl[2]||'') });
+    let cup2000Id2 = body.tournamentId || null;
+    if (!cup2000Id2 && body.tournamentNavn) {
+      const navnNorm2 = body.tournamentNavn.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (navnNorm2) {
+        const listHtml2 = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', { headers: { 'User-Agent': 'Mozilla/5.0' } })).text();
+        for (const m of listHtml2.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
+          const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
+          if (rowName.includes(navnNorm2) || navnNorm2.includes(rowName.split(' ').slice(-3).join(' '))) { cup2000Id2 = m[1]; break; }
         }
       }
     }
-    if (!classes2.length) return json({ error: 'Turnering ikke funnet', navnNorm: navnNorm2 });
-    // Hent raw data for første klasse + første pulje
-    const firstClass = classes2[0];
-    const d2 = await (await fetch(`${BASE3}?tournamentid=${cup2000Id2}&c=${firstClass.c}&e=${firstClass.e}`, { headers: UA3 })).json();
-    const puljer2 = d2.data && d2.data[0] && Array.isArray(d2.data[0][3]) ? d2.data[0][3] : [];
-    const firstPuljeId = puljer2[0] ? puljer2[0][0] : null;
-    let pdRaw = null;
-    if (firstPuljeId) {
-      pdRaw = await (await fetch(`${BASE3}?tournamentid=${cup2000Id2}&c=${firstClass.c}&e=${firstClass.e}&p=0&g=${firstPuljeId}`, { headers: UA3 })).json();
-    }
-    const rawRounds = pdRaw && pdRaw.data && Array.isArray(pdRaw.data[2]) && Array.isArray(pdRaw.data[2][0]) ? pdRaw.data[2][0] : [];
-    return json({
-      cup2000Id: cup2000Id2,
-      firstClass,
-      pdDataLength: pdRaw && pdRaw.data ? pdRaw.data.length : null,
-      pdAllKeys: pdRaw ? Object.keys(pdRaw) : null,
-      rawMatches: rawRounds.slice(0, 3).map(m => Array.isArray(m) ? { len: m.length, m0: m[0], m2: m[2], m8: m[8], m9: m[9], m10: m[10], m11: m[11], m12: m[12] } : m)
-    });
+    if (!cup2000Id2) return json({ error: 'Turnering ikke funnet' });
+    const BASE3 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
+    const UA3 = { 'User-Agent': 'Mozilla/5.0' };
+    const c2 = String(body.c || '0'), e2 = String(body.e || '0');
+    const raw2 = await (await fetch(BASE3 + '?tournamentid=' + cup2000Id2 + '&c=' + c2 + '&e=' + e2, { headers: UA3 })).text();
+    return json({ cup2000Id: cup2000Id2, raw: raw2.substring(0, 3000) });
   }
 
   if (path === '/cup2000') {
@@ -249,20 +228,71 @@ async function handleRequest(request, env) {
           if (navnArr.length) seedMap2[idx] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
         }
         const runder2 = Array.isArray(d.data[2]) ? d.data[2] : [];
+
+        // Bygg kart: kampNr → { sp1: [...], sp2: [...] } for oppslag av "Vinder af kamp X"
+        const kampNrMap = {};
+        for (const runde of runder2) {
+          if (!Array.isArray(runde) || !Array.isArray(runde[1])) continue;
+          const kl = Array.isArray(runde[1][0]) ? runde[1][0] : runde[1];
+          for (const m of kl) {
+            if (!Array.isArray(m)) continue;
+            kampNrMap[String(m[0])] = { sp1: seedMap2[m[8]] || [], sp2: seedMap2[m[9]] || [] };
+          }
+        }
+
         for (const runde of runder2) {
           if (!Array.isArray(runde) || !Array.isArray(runde[1])) continue;
           const kampliste = Array.isArray(runde[1][0]) ? runde[1][0] : runde[1];
           for (const match of kampliste) {
             if (!Array.isArray(match)) continue;
-            const spiller1 = seedMap2[match[8]] || [];
-            const spiller2 = seedMap2[match[9]] || [];
+
+            // Løs opp "Vinder af kamp X" — idx === -1 betyr ukjent spiller
+            const resolveSpiller = (idx, navnTekstArr) => {
+              if (idx !== -1) return seedMap2[idx] || [];
+              // Finn kamp-nr fra tekst som "Vinder af kamp 62"
+              const tekst = Array.isArray(navnTekstArr) ? (navnTekstArr[0] || '') : '';
+              const km = String(tekst).match(/kamp\s+(\d+)/i);
+              if (!km) return [];
+              const ref = kampNrMap[km[1]];
+              if (!ref) return [];
+              // Returner begge spillere fra den refererte kampen
+              return [...ref.sp1, ...ref.sp2];
+            };
+
+            const spiller1 = resolveSpiller(match[8], match[6]);
+            const spiller2 = resolveSpiller(match[9], match[7]);
             const isSp1 = spiller1.some(s => matchNavn2(s.navn));
             const isSp2 = spiller2.some(s => matchNavn2(s.navn));
             if (!isSp1 && !isSp2) continue;
             const motSpillere = isSp1 ? spiller2 : spiller1;
-            if (!motSpillere.length) continue;
-            const mot = motSpillere.map(s => s.navn).join(' / ');
-            const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+            // Bygg motstander-tekst: ved ukjent, bruk "Vinder av kamp X" basert på ref-kampens spillere
+            const motIdx = isSp1 ? match[9] : match[8];
+            const erUkjentMot = motIdx === -1;
+            const motNavnTekst = isSp1 ? match[7] : match[6];
+            let mot, motKlubb;
+            if (erUkjentMot && motSpillere.length > 0) {
+              // Vis hvem som kan bli motstander (begge lag i ref-kampen)
+              const tekst = Array.isArray(motNavnTekst) ? (motNavnTekst[0] || '') : String(motNavnTekst || '');
+              const km2 = tekst.match(/kamp\s+(\d+)/i);
+              if (km2) {
+                const ref2 = kampNrMap[km2[1]];
+                if (ref2 && ref2.sp1.length && ref2.sp2.length) {
+                  const lag1 = ref2.sp1.map(s => s.navn).join('/');
+                  const lag2 = ref2.sp2.map(s => s.navn).join('/');
+                  mot = 'Vinner av ' + lag1 + ' vs ' + lag2;
+                  motKlubb = '';
+                } else {
+                  mot = motSpillere.map(s => s.navn).join(' / ');
+                  motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+                }
+              } else {
+                mot = motSpillere.map(s => s.navn).join(' / ');
+                motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+              }
+            } else {
+              mot = motSpillere.map(s => s.navn).join(' / ');
+              motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+            }
             const rawTime = String(match[2] || '');
             const tp = rawTime.trim().split(/\s+/);
             let timeStr;
