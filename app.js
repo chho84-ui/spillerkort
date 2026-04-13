@@ -705,6 +705,9 @@ function visTurnering(t) {
                       + '" class="sk-mot-link" onclick="aapneMotstander(\'' + s.navn.replace(/'/g, "\\'") + '\',\'' + (s.klubb||'').replace(/'/g, "\\'") + '\')">' + s.navn + '</span>';
                   }).join(' ');
                 }
+                if ((kp.mot || '').indexOf('Vinner av ') === 0) {
+                  return '<span style="font-size:11px;color:#888;font-style:italic">' + kp.mot + '</span>';
+                }
                 return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + (kp.mot||'').replace(/'/g, "\\'") + '\',\'' + (kp.motKlubb||'').replace(/'/g, "\\'") + '\')">' + (kp.mot || '') + '</span>';
               })(k, ki)
             + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + k.motKlubb + '</span>' : '')
