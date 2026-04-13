@@ -289,7 +289,7 @@ function sjekkTurnering(tid, info) {
       if (info.isPast) return { tournamentId: tid, registreringer: [], navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller };
       return null;
     }
-    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller };
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller, isPast: !!info.isPast };
   });
 }
 
@@ -506,15 +506,15 @@ function visTurnering(t) {
       + '</div>';
   }
   var fallbackBtn = t.cup2000Url ? '<a class="sk-btn" href="' + t.cup2000Url + '&search=1" target="_blank" style="margin-top:4px;font-size:11px;background:#0f3460">Åpne i Cup2000</a>' : '';
-  if (!t.registreringer.length) {
+  if (!t.registreringer.length || t.isPast) {
     div.innerHTML = '<div id="sk-kl-past-' + t.tournamentId + '" class="sk-kamplist"><div style="font-size:11px;color:#555;text-align:center;padding:2px 0">Laster resultater...</div></div>' + fallbackBtn;
   } else {
     div.innerHTML = rh + fallbackBtn;
   }
   res.appendChild(div);
 
-  // Hent ranking for makkere asynkront
-  for (var mi = 0; mi < t.registreringer.length; mi++) {
+  // Hent ranking for makkere asynkront (kun kommende turneringer)
+  for (var mi = 0; mi < t.registreringer.length && !t.isPast; mi++) {
     (function(reg, idx) {
       if (!reg.makkere.length || reg.makkere[0].navn === 'X-makker') return;
       var kode = discTilKode(reg.disiplin);
@@ -545,7 +545,7 @@ function visTurnering(t) {
         if (klc) klc.innerHTML = '';
       }
       if (!kamper.length) {
-        if (!t.registreringer.length) {
+        if (!t.registreringer.length && t.isPast) {
           // Past tournament stub with no cup2000 games — player wasn't in this tournament
           if (sec.parentNode) sec.parentNode.removeChild(sec);
           if (div.parentNode) div.parentNode.removeChild(div);
