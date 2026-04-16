@@ -13,6 +13,10 @@ var auth = firebase.auth();
 var currentUser = null;
 var _favoritter = {}; // cache: playerId -> true/false
 
+auth.getRedirectResult().catch(function(e) {
+  if (e.code !== 'auth/no-auth-event') console.error('Redirect auth feil:', e);
+});
+
 auth.onAuthStateChanged(function(user) {
   currentUser = user;
   var loginBtn = document.getElementById('login-btn');
@@ -98,7 +102,7 @@ function loggInn() {
 function loggInnGoogle() {
   var provider = new firebase.auth.GoogleAuthProvider();
   lukkAuthModal();
-  auth.signInWithPopup(provider).catch(function(e) { console.error(e); });
+  auth.signInWithRedirect(provider);
 }
 
 function loggUt() {
