@@ -207,6 +207,7 @@ var PROXY = 'https://spillerkort-proxy.chho84.workers.dev';
 
 var SN, SI, SK, SS;
 var oliverRanking = [];
+var _hentGen = 0;
 
 // 10-minutters frontend-cache
 var _cache = {};
@@ -1370,6 +1371,8 @@ function hent() {
 
   lagre();
 
+  var gen = ++_hentGen;
+
   var now0 = new Date();
   var seasonStart = now0.getMonth() >= 7 ? now0.getFullYear() : now0.getFullYear() - 1;
   SS = '200' + seasonStart;
@@ -1382,6 +1385,7 @@ function hent() {
   res.innerHTML = '<div class="sk-status" id="st">Søker etter spiller...</div>';
 
   sokSpiller(SN, SK).then(function(data) {
+    if (gen !== _hentGen) return;
     if (data.error || !data.playerid) {
       sett('Fant ikke spiller: ' + SN + ' / ' + SK);
       btn.disabled = false;
@@ -1392,6 +1396,7 @@ function hent() {
     lagreHistorikk(SI, SN, SK);
     sett('Henter spillerinfo...');
     return Promise.all([hentRanking(), finnTurneringer()]).then(function(d) {
+      if (gen !== _hentGen) return;
       sett('');
       // Stjerneknapp
       var res2 = document.getElementById('resultat');
@@ -1408,10 +1413,13 @@ function hent() {
       }
     });
   }).catch(function(e) {
+    if (gen !== _hentGen) return;
     sett('Feil: ' + e.message);
   }).finally(function() {
-    btn.disabled = false;
-    btn.textContent = '🔍 Hent spillerkort';
+    if (gen === _hentGen) {
+      btn.disabled = false;
+      btn.textContent = '🔍 Hent spillerkort';
+    }
   });
 }
 
