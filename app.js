@@ -581,7 +581,7 @@ function visTurnering(t) {
                   if (rankTekst) sistePlass = rankTekst;
                   if (poengTekst) sistePoeng = poengTekst;
                   var playerText = playerCell.textContent || '';
-                  if (playerText.toLowerCase().indexOf(SN.toLowerCase().split(' ')[0]) === -1) return;
+                  if (playerText.toLowerCase().indexOf(SN.toLowerCase()) === -1) return;
                   var disc = h2.textContent.trim();
                   // For doubles: poeng kan stå på makkerens rad — bruk sistePoeng som fallback
                   resultatBlokker.push({ disc: disc, plass: sistePlass, poeng: poengTekst || sistePoeng });
