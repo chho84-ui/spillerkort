@@ -60,25 +60,19 @@ async function handleRequest(request, env) {
     });
     const sdata = await sr.json();
     const shtml = String((sdata.d && (sdata.d.Html || sdata.d.html)) || '');
-    // Ekstraher spillere med navn og klubb fra HTML-rader
-    const players = [];
-    const seenIds = new Set();
-    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let rm;
-    while ((rm = rowRe.exec(shtml)) !== null) {
-      const row = rm[1];
-      const idM = row.match(/SP1\('(\d+)'/);
-      if (!idM || seenIds.has(idM[1])) continue;
-      seenIds.add(idM[1]);
-      const cells = [];
-      const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-      let tm;
-      while ((tm = tdRe.exec(row)) !== null) {
-        const text = tm[1].replace(/<[^>]*>/g, '').trim();
-        if (text) cells.push(text);
-      }
-      players.push({ id: idM[1], navn: cells[0] || '', klubb: cells[1] || '' });
-    }
+    // Finn alle player-IDs (samme regex som før — vi vet den virker)
+    const hits = [];
+    const re2 = /SP1\('(\d+)'/g;
+    let m2;
+    while ((m2 = re2.exec(shtml)) !== null) hits.push(m2[1]);
+
+    // SP1('id','nr','Navn Navnesen','xx','Klubb','M') — parse direkte fra argumentene
+    const players = hits.map(pid => {
+      const idx = shtml.indexOf("SP1('" + pid + "'");
+      const chunk = shtml.substring(idx, idx + 200);
+      const m = chunk.match(/SP1\('[^']*',\s*'[^']*',\s*'([^']+)',\s*'[^']*',\s*'([^']*)'/);
+      return { id: pid, navn: m ? m[1] : '', klubb: m ? m[2] : '' };
+    });
     if (!players.length) {
       if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'not_found'], doubles: [0], indexes: ['search'] });
       return json({error: 'Spiller ikke funnet'}, 404);
