@@ -1,7 +1,7 @@
 // ── Firebase ──────────────────────────────────────────────────────────────
 var firebaseConfig = {
   apiKey: "AIzaSyBxavzk2kA1MHbYWhrEhlW9vcIm8wO691Q",
-  authDomain: "goodminton.no",
+  authDomain: "goodminton-bb96a.firebaseapp.com",
   projectId: "goodminton-bb96a",
   storageBucket: "goodminton-bb96a.firebasestorage.app",
   messagingSenderId: "1051716838708",
@@ -13,9 +13,6 @@ var auth = firebase.auth();
 var currentUser = null;
 var _favoritter = {}; // cache: playerId -> true/false
 
-auth.getRedirectResult().catch(function(e) {
-  if (e.code !== 'auth/no-auth-event') console.error('Redirect auth feil:', e);
-});
 
 auth.onAuthStateChanged(function(user) {
   currentUser = user;
@@ -102,7 +99,7 @@ function loggInn() {
 function loggInnGoogle() {
   var provider = new firebase.auth.GoogleAuthProvider();
   lukkAuthModal();
-  auth.signInWithRedirect(provider);
+  auth.signInWithPopup(provider).catch(function(e) { console.error(e); });
 }
 
 function loggUt() {
