@@ -520,11 +520,15 @@ function finnTurneringer() {
         }
       });
 
-      // Flett inn lagrede turneringer som ikke kom fra API denne gangen
+      // Flett inn lagrede turneringer som ikke kom fra API denne gangen.
+      // Utelat turneringer som ble sjekket denne sessionen (tids) men ikke
+      // fant spilleren — disse skal ikke gjenopplives fra localStorage.
       var aktiveTids = {};
       aktive.forEach(function(t) { aktiveTids[t.tournamentId] = true; });
+      var sjekkdeTids = {};
+      tids.forEach(function(tid) { sjekkdeTids[tid] = true; });
       Object.keys(lagrede).forEach(function(tid) {
-        if (!aktiveTids[tid]) {
+        if (!aktiveTids[tid] && !sjekkdeTids[tid]) {
           var lt = lagrede[tid];
           lt.isPast = true;
           aktive.push(lt);
