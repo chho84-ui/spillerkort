@@ -60,26 +60,40 @@ async function handleRequest(request, env) {
     });
     const sdata = await sr.json();
     const shtml = String((sdata.d && (sdata.d.Html || sdata.d.html)) || '');
-    const hits = [];
-    const re2 = /SP1\('(\d+)'/g;
-    let m2;
-    while ((m2 = re2.exec(shtml)) !== null) hits.push(m2[1]);
-    if (!hits.length) {
-      if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'not_found'], doubles: [0], indexes: ['search'] });
-      return json({error: 'Spiller ikke funnet', html: shtml.substring(0, 500)}, 404);
-    }
-    const klubbLower = (body.klubb || '').toLowerCase();
-    let foundId = hits[0];
-    if (hits.length > 1) {
-      for (const pid of hits) {
-        const idx = shtml.indexOf("SP1('" + pid + "'");
-        const chunk = shtml.substring(idx, idx + 400).toLowerCase();
-        if (klubbLower && chunk.indexOf(klubbLower) !== -1) { foundId = pid; break; }
+    // Ekstraher spillere med navn og klubb fra HTML-rader
+    const players = [];
+    const seenIds = new Set();
+    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rm;
+    while ((rm = rowRe.exec(shtml)) !== null) {
+      const row = rm[1];
+      const idM = row.match(/SP1\('(\d+)'/);
+      if (!idM || seenIds.has(idM[1])) continue;
+      seenIds.add(idM[1]);
+      const cells = [];
+      const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let tm;
+      while ((tm = tdRe.exec(row)) !== null) {
+        const text = tm[1].replace(/<[^>]*>/g, '').trim();
+        if (text) cells.push(text);
       }
+      players.push({ id: idM[1], navn: cells[0] || '', klubb: cells[1] || '' });
     }
-    if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'found', foundId], doubles: [hits.length], indexes: ['search'] });
-    if (hits.length === 1) return json({playerid: foundId});
-    return json({playerid: foundId, multiple: hits});
+    if (!players.length) {
+      if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'not_found'], doubles: [0], indexes: ['search'] });
+      return json({error: 'Spiller ikke funnet'}, 404);
+    }
+    // Hvis bare autocomplete (ingen klubb oppgitt), returner alle treff
+    if (body.autocomplete) return json({ players });
+    // Velg beste treff basert på klubb
+    const klubbLower = (body.klubb || '').toLowerCase();
+    let best = players[0];
+    if (klubbLower && players.length > 1) {
+      const match = players.find(p => p.klubb.toLowerCase().indexOf(klubbLower) !== -1);
+      if (match) best = match;
+    }
+    if (env.ANALYTICS) env.ANALYTICS.writeDataPoint({ blobs: [body.navn || '', body.klubb || '', 'found', best.id], doubles: [players.length], indexes: ['search'] });
+    return json({ playerid: best.id, players });
   }
 
   if (path === '/api') {

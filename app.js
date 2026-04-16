@@ -241,6 +241,89 @@ function laster() {
   if (k) document.getElementById('f-klubb').value = k;
 }
 
+// ── Autocomplete ──────────────────────────────────────────────────────────
+var _acTimer = null;
+var _acValgt = -1;
+var _acSpillere = [];
+
+function onNavnInput() {
+  clearTimeout(_acTimer);
+  var val = document.getElementById('f-navn').value.trim();
+  if (val.length < 3) { lukkDropdown(); return; }
+  _acTimer = setTimeout(function() { hentForslag(val); }, 300);
+}
+
+function onNavnKeydown(e) {
+  var dd = document.getElementById('ac-dropdown');
+  var items = dd.querySelectorAll('.ac-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _acValgt = Math.min(_acValgt + 1, items.length - 1);
+    oppdaterValgt(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _acValgt = Math.max(_acValgt - 1, -1);
+    oppdaterValgt(items);
+  } else if (e.key === 'Enter' && _acValgt >= 0) {
+    e.preventDefault();
+    if (items[_acValgt]) items[_acValgt].click();
+  } else if (e.key === 'Escape') {
+    lukkDropdown();
+  }
+}
+
+function oppdaterValgt(items) {
+  items.forEach(function(el, i) { el.classList.toggle('ac-item-valgt', i === _acValgt); });
+}
+
+function hentForslag(navn) {
+  fetch(PROXY + '/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ navn: navn, autocomplete: true })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    _acSpillere = d.players || [];
+    visDropdown(_acSpillere);
+  }).catch(function() {});
+}
+
+function visDropdown(spillere) {
+  var dd = document.getElementById('ac-dropdown');
+  if (!spillere.length) { lukkDropdown(); return; }
+  _acValgt = -1;
+  dd.innerHTML = spillere.map(function(s, i) {
+    return '<div class="ac-item" onmousedown="velgSpiller(' + i + ')">'
+      + '<span class="ac-navn">' + s.navn + '</span>'
+      + '<span class="ac-klubb">' + (s.klubb || '') + '</span>'
+      + '</div>';
+  }).join('');
+  dd.style.display = 'block';
+}
+
+function lukkDropdown() {
+  var dd = document.getElementById('ac-dropdown');
+  if (dd) dd.style.display = 'none';
+  _acSpillere = [];
+  _acValgt = -1;
+}
+
+function velgSpiller(idx) {
+  var s = _acSpillere[idx];
+  if (!s) return;
+  document.getElementById('f-navn').value = s.navn;
+  document.getElementById('f-klubb').value = s.klubb || '';
+  lukkDropdown();
+  SI = s.id;
+  SN = s.navn;
+  SK = s.klubb || '';
+  hent();
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#formkort')) lukkDropdown();
+});
+// ── End Autocomplete ──────────────────────────────────────────────────────
+
 function sokSpiller(navn, klubb) {
   var key = 'sok:' + navn + '|' + klubb;
   var hit = cacheGet(key);

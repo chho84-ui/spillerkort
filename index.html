@@ -36,10 +36,13 @@
 </div>
 
 <div id="formkort">
-  <label>Spillernavn (fullt)
-    <input id="f-navn" type="text" placeholder="Ola Nordmann" autocomplete="off">
+  <label>Spillernavn
+    <div style="position:relative">
+      <input id="f-navn" type="text" placeholder="Skriv navn..." autocomplete="off" oninput="onNavnInput()" onkeydown="onNavnKeydown(event)">
+      <div id="ac-dropdown" class="ac-dropdown" style="display:none"></div>
+    </div>
   </label>
-  <label>Klubb
+  <label id="klubb-label">Klubb <span style="color:#555;font-weight:normal">(valgfritt)</span>
     <input id="f-klubb" type="text" placeholder="Sotra" autocomplete="off">
   </label>
   <button id="hent-btn" onclick="hent()">🔍 Hent spillerkort</button>
