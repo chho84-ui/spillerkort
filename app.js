@@ -1,3 +1,139 @@
+// ── Firebase ──────────────────────────────────────────────────────────────
+var firebaseConfig = {
+  apiKey: "AIzaSyBxavzk2kA1MHbYWhrEhlW9vcIm8wO691Q",
+  authDomain: "goodminton-bb96a.firebaseapp.com",
+  projectId: "goodminton-bb96a",
+  storageBucket: "goodminton-bb96a.firebasestorage.app",
+  messagingSenderId: "1051716838708",
+  appId: "1:1051716838708:web:69dae8b305304e5af9f161"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.firestore();
+var auth = firebase.auth();
+var currentUser = null;
+var _favoritter = {}; // cache: playerId -> true/false
+
+auth.onAuthStateChanged(function(user) {
+  currentUser = user;
+  var loginBtn = document.getElementById('login-btn');
+  var userInfo = document.getElementById('user-info');
+  if (user) {
+    loginBtn.style.display = 'none';
+    userInfo.style.display = 'flex';
+    document.getElementById('user-avatar').src = user.photoURL || '';
+    document.getElementById('user-navn').textContent = user.displayName ? user.displayName.split(' ')[0] : '';
+    hentFavoritterCache();
+  } else {
+    loginBtn.style.display = '';
+    userInfo.style.display = 'none';
+    _favoritter = {};
+  }
+  oppdaterStjerneknapp();
+});
+
+function loggInn() {
+  var provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(function(e) { console.error(e); });
+}
+
+function loggUt() {
+  auth.signOut();
+}
+
+function hentFavoritterCache() {
+  if (!currentUser) return;
+  db.collection('users').doc(currentUser.uid).collection('favoritter').get().then(function(snap) {
+    _favoritter = {};
+    snap.forEach(function(doc) { _favoritter[doc.id] = doc.data(); });
+    oppdaterStjerneknapp();
+  });
+}
+
+function erFavoritt(playerId) {
+  return !!_favoritter[String(playerId)];
+}
+
+function toggleFavoritt() {
+  if (!currentUser) { loggInn(); return; }
+  if (!SI) return;
+  var pid = String(SI);
+  var ref = db.collection('users').doc(currentUser.uid).collection('favoritter').doc(pid);
+  if (erFavoritt(pid)) {
+    ref.delete().then(function() {
+      delete _favoritter[pid];
+      oppdaterStjerneknapp();
+    });
+  } else {
+    var data = { navn: SN, klubb: SK, playerId: pid, lagtTil: firebase.firestore.FieldValue.serverTimestamp() };
+    ref.set(data).then(function() {
+      _favoritter[pid] = data;
+      oppdaterStjerneknapp();
+    });
+  }
+}
+
+function lagreHistorikk(playerId, navn, klubb) {
+  if (!currentUser) return;
+  var pid = String(playerId);
+  db.collection('users').doc(currentUser.uid).collection('historikk').doc(pid).set({
+    navn: navn, klubb: klubb, playerId: pid,
+    sistSokt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+function oppdaterStjerneknapp() {
+  var btn = document.getElementById('sk-stjerne-btn');
+  if (!btn || !SI) return;
+  var fav = erFavoritt(String(SI));
+  btn.textContent = fav ? '★ Favoritt' : '☆ Lagre';
+  btn.classList.toggle('er-favoritt', fav);
+}
+
+function visFavoritter() {
+  if (!currentUser) { loggInn(); return; }
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-fav-overlay';
+  overlay.innerHTML = '<div class="sk-gruppe-panel">'
+    + '<div class="sk-gruppe-hdr"><span class="sk-gruppe-tittel">⭐ Favoritter</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="document.getElementById(\'sk-fav-overlay\').remove()">×</button></div>'
+    + '<div id="sk-fav-liste"><div style="color:#888;font-size:12px;text-align:center;padding:16px">Laster...</div></div>'
+    + '<div style="margin-top:12px;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.05em">Historikk</div>'
+    + '<div id="sk-hist-liste"><div style="color:#888;font-size:12px;text-align:center;padding:8px">Laster...</div></div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+  var uid = currentUser.uid;
+  db.collection('users').doc(uid).collection('favoritter').orderBy('lagtTil', 'desc').get().then(function(snap) {
+    var el = document.getElementById('sk-fav-liste');
+    if (!el) return;
+    if (snap.empty) { el.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:8px">Ingen favoritter ennå</div>'; return; }
+    el.innerHTML = snap.docs.map(function(doc) {
+      var d = doc.data();
+      return '<div class="sk-fav-rad" onclick="aapneMotstander(\'' + d.navn.replace(/'/g, "\\'") + '\',\'' + (d.klubb||'').replace(/'/g, "\\'") + '\');document.getElementById(\'sk-fav-overlay\').remove()">'
+        + '<span class="sk-fav-navn">' + d.navn + '</span>'
+        + '<span class="sk-fav-klubb">' + (d.klubb || '') + '</span>'
+        + '</div>';
+    }).join('');
+  });
+
+  db.collection('users').doc(uid).collection('historikk').orderBy('sistSokt', 'desc').limit(15).get().then(function(snap) {
+    var el = document.getElementById('sk-hist-liste');
+    if (!el) return;
+    if (snap.empty) { el.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:8px">Ingen historikk ennå</div>'; return; }
+    el.innerHTML = snap.docs.map(function(doc) {
+      var d = doc.data();
+      return '<div class="sk-fav-rad" onclick="aapneMotstander(\'' + d.navn.replace(/'/g, "\\'") + '\',\'' + (d.klubb||'').replace(/'/g, "\\'") + '\');document.getElementById(\'sk-fav-overlay\').remove()">'
+        + '<span class="sk-fav-navn">' + d.navn + '</span>'
+        + '<span class="sk-fav-klubb">' + (d.klubb || '') + '</span>'
+        + '</div>';
+    }).join('');
+  });
+}
+
+// ── End Firebase ──────────────────────────────────────────────────────────
+
 var PROXY = 'https://spillerkort-proxy.chho84.workers.dev';
 
 var SN, SI, SK, SS;
@@ -1101,9 +1237,17 @@ function hent() {
       return;
     }
     SI = data.playerid;
+    lagreHistorikk(SI, SN, SK);
     sett('Henter spillerinfo...');
     return Promise.all([hentRanking(), finnTurneringer()]).then(function(d) {
       sett('');
+      // Stjerneknapp
+      var res2 = document.getElementById('resultat');
+      var stjerneDiv = document.createElement('div');
+      stjerneDiv.style.cssText = 'text-align:right;margin-bottom:6px';
+      stjerneDiv.innerHTML = '<button id="sk-stjerne-btn" class="sk-stjerne-btn" onclick="toggleFavoritt()">☆ Lagre</button>';
+      res2.insertBefore(stjerneDiv, res2.firstChild);
+      oppdaterStjerneknapp();
       visRanking(d[0]);
       if (!d[1].length) {
         sett('Ingen kommende turneringer funnet.');

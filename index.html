@@ -8,12 +8,27 @@
 <title>Goodminton – Spillerkort</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏸</text></svg>">
 <link rel="stylesheet" href="style.css">
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
 <div id="topbar">
-  <h1>🏸 Goodminton</h1>
-  <div class="tagline">goodminton.no — ditt badminton-spillerkort</div>
+  <div id="topbar-main">
+    <h1>🏸 Goodminton</h1>
+    <div class="tagline">goodminton.no — ditt badminton-spillerkort</div>
+  </div>
+  <div id="auth-area">
+    <button id="login-btn" onclick="loggInn()" style="display:none">Logg inn med Google</button>
+    <div id="user-info" style="display:none">
+      <img id="user-avatar" src="" alt="" referrerpolicy="no-referrer">
+      <span id="user-navn"></span>
+      <button class="auth-icon-btn" onclick="visFavoritter()" title="Favoritter">⭐</button>
+      <button class="auth-icon-btn" onclick="loggUt()" title="Logg ut">↩</button>
+    </div>
+  </div>
 </div>
 
 <div id="infoboks">
