@@ -45,6 +45,25 @@
   <button id="hent-btn" onclick="hent()">🔍 Hent spillerkort</button>
 </div>
 
+<div id="auth-modal" style="display:none">
+  <div class="auth-modal-boks">
+    <div class="auth-modal-hdr">
+      <span id="auth-modal-tittel">Logg inn</span>
+      <button class="sk-gruppe-xbtn" onclick="lukkAuthModal()">×</button>
+    </div>
+    <button class="auth-google-btn" onclick="loggInnGoogle()">Fortsett med Google</button>
+    <div class="auth-divider"><span>eller</span></div>
+    <input id="auth-epost" type="email" placeholder="E-post" autocomplete="email">
+    <input id="auth-passord" type="password" placeholder="Passord" autocomplete="current-password">
+    <div id="auth-feil" class="auth-feil"></div>
+    <button id="auth-submit-btn" onclick="authMedEpost()">Logg inn</button>
+    <div class="auth-bytt">
+      <span id="auth-bytt-tekst">Har du ikke konto?</span>
+      <button onclick="byttAuthModus()">Opprett konto</button>
+    </div>
+  </div>
+</div>
+
 <div id="resultat">
   <div class="sk-status" id="st">Fyll inn spillerinfo og trykk Hent.</div>
 </div>

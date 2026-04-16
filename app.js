@@ -31,8 +31,66 @@ auth.onAuthStateChanged(function(user) {
   oppdaterStjerneknapp();
 });
 
+var _authModus = 'login'; // 'login' eller 'register'
+
+function aapneAuthModal() {
+  _authModus = 'login';
+  oppdaterAuthModal();
+  document.getElementById('auth-modal').style.display = 'flex';
+  document.getElementById('auth-epost').value = '';
+  document.getElementById('auth-passord').value = '';
+  document.getElementById('auth-feil').textContent = '';
+  setTimeout(function() { document.getElementById('auth-epost').focus(); }, 50);
+}
+
+function lukkAuthModal() {
+  document.getElementById('auth-modal').style.display = 'none';
+}
+
+function oppdaterAuthModal() {
+  var erReg = _authModus === 'register';
+  document.getElementById('auth-modal-tittel').textContent = erReg ? 'Opprett konto' : 'Logg inn';
+  document.getElementById('auth-submit-btn').textContent = erReg ? 'Opprett konto' : 'Logg inn';
+  document.getElementById('auth-bytt-tekst').textContent = erReg ? 'Har du allerede konto?' : 'Har du ikke konto?';
+  document.querySelector('.auth-bytt button').textContent = erReg ? 'Logg inn' : 'Opprett konto';
+  document.getElementById('auth-passord').autocomplete = erReg ? 'new-password' : 'current-password';
+}
+
+function byttAuthModus() {
+  _authModus = _authModus === 'login' ? 'register' : 'login';
+  oppdaterAuthModal();
+  document.getElementById('auth-feil').textContent = '';
+}
+
+function authMedEpost() {
+  var epost = document.getElementById('auth-epost').value.trim();
+  var passord = document.getElementById('auth-passord').value;
+  var feilEl = document.getElementById('auth-feil');
+  var btn = document.getElementById('auth-submit-btn');
+  if (!epost || !passord) { feilEl.textContent = 'Fyll inn e-post og passord.'; return; }
+  btn.disabled = true;
+  feilEl.textContent = '';
+  var prom = _authModus === 'register'
+    ? auth.createUserWithEmailAndPassword(epost, passord)
+    : auth.signInWithEmailAndPassword(epost, passord);
+  prom.then(function() {
+    lukkAuthModal();
+  }).catch(function(e) {
+    var mld = { 'auth/email-already-in-use': 'E-posten er allerede i bruk.', 'auth/invalid-email': 'Ugyldig e-postadresse.', 'auth/weak-password': 'Passordet er for svakt (min. 6 tegn).', 'auth/user-not-found': 'Fant ingen konto med denne e-posten.', 'auth/wrong-password': 'Feil passord.', 'auth/invalid-credential': 'Feil e-post eller passord.' };
+    feilEl.textContent = mld[e.code] || 'Noe gikk galt. Prøv igjen.';
+  }).finally(function() { btn.disabled = false; });
+}
+
 function loggInn() {
+  var modal = document.getElementById('auth-modal');
+  if (modal) { aapneAuthModal(); return; }
   var provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(function(e) { console.error(e); });
+}
+
+function loggInnGoogle() {
+  var provider = new firebase.auth.GoogleAuthProvider();
+  lukkAuthModal();
   auth.signInWithPopup(provider).catch(function(e) { console.error(e); });
 }
 
