@@ -20,8 +20,15 @@ auth.onAuthStateChanged(function(user) {
   if (user) {
     loginBtn.style.display = 'none';
     userInfo.style.display = 'flex';
-    document.getElementById('user-avatar').src = user.photoURL || '';
-    document.getElementById('user-navn').textContent = user.displayName ? user.displayName.split(' ')[0] : '';
+    var avatar = document.getElementById('user-avatar');
+    if (user.photoURL) {
+      avatar.src = user.photoURL;
+      avatar.style.display = '';
+    } else {
+      avatar.style.display = 'none';
+    }
+    var visNavn = user.displayName ? user.displayName.split(' ')[0] : (user.email ? user.email.split('@')[0] : '');
+    document.getElementById('user-navn').textContent = visNavn;
     hentFavoritterCache();
   } else {
     loginBtn.style.display = '';
