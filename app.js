@@ -1,7 +1,7 @@
 // ── Firebase ──────────────────────────────────────────────────────────────
 var firebaseConfig = {
   apiKey: "AIzaSyBxavzk2kA1MHbYWhrEhlW9vcIm8wO691Q",
-  authDomain: "goodminton-bb96a.firebaseapp.com",
+  authDomain: "goodminton.no",
   projectId: "goodminton-bb96a",
   storageBucket: "goodminton-bb96a.firebasestorage.app",
   messagingSenderId: "1051716838708",
