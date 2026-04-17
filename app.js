@@ -575,10 +575,7 @@ function sjekkTurnering(tid, info) {
     for (var i = 0; i < alleRegs.length; i++) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
-    if (!regs.length) {
-      if (info.isPast) return { tournamentId: tid, registreringer: [], navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller };
-      return null;
-    }
+    if (!regs.length) return null;
     return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller, isPast: !!info.isPast };
   });
 }
