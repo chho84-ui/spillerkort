@@ -156,7 +156,7 @@ async function handleRequest(request, env) {
       const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       })).text();
-      const normStr = s => s.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
+      const normStr = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
       const navnNorm = normStr(body.tournamentNavn);
       for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
         const rowName = normStr(m[3]);
@@ -569,7 +569,7 @@ async function handleRequest(request, env) {
       const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       })).text();
-      const normStr2 = s => s.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
+      const normStr2 = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
       const navnNorm = normStr2(body.tournamentNavn);
       for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
         const rowName = normStr2(m[3]);
