@@ -213,6 +213,93 @@ async function handleRequest(request, env) {
       }
     }
 
+    // renderMethod=2: c=0 returnerer alle klasser og spillere direkte (ikke HTML med lenker)
+    // Behandle direkte uten per-klasse-fetch
+    if (!classes.length && navJson.renderMethod === 2 && Array.isArray(navJson.data)) {
+      const matchNavn2k = (navn) => {
+        const n = decEnt(String(navn)).toLowerCase();
+        const parts = navnFull.split(' ').filter(Boolean);
+        return parts.length >= 2
+          ? n.includes(parts[0]) && n.includes(parts[parts.length - 1])
+          : n.includes(navnFull);
+      };
+      const kamper2k = [];
+      const grupper2k = [];
+
+      for (const cls of navJson.data) {
+        const className = decEnt(String(cls[2] || ''));
+        const dc = discCode(className);
+        const clsPuljer = Array.isArray(cls[3]) ? cls[3] : [];
+
+        for (const pulje of clsPuljer) {
+          const puljeId = pulje[0];
+          const spillere = Array.isArray(pulje[1]) ? pulje[1] : [];
+          const harSpiller = spillere.some(s => {
+            const navnArr = Array.isArray(s[1]) ? s[1] : [];
+            return navnArr.some(n => matchNavn2k(n));
+          });
+          if (!harSpiller) continue;
+
+          const pd = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=0&e=0&p=0&g=${puljeId}`, { headers: UA })).json();
+          if (!Array.isArray(pd.data) || pd.data.length < 3) continue;
+
+          // pd.data[0] = tittel (streng), pd.data[1] = standings, pd.data[2] = kamper
+          const spillerMap2k = {};
+          for (const s of (pd.data[1] || [])) {
+            if (!Array.isArray(s)) continue;
+            const navnArr = Array.isArray(s[5]) ? s[5].map(n => decEnt(String(n))) : [];
+            spillerMap2k[s[0]] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
+          }
+
+          const navnParts2k = navnFull.split(' ').filter(Boolean);
+          const spillereListe = (pd.data[1] || []).filter(Array.isArray).map(s => {
+            const navnArr = Array.isArray(s[5]) ? s[5].map(n => decEnt(String(n))) : [];
+            const navn = navnArr.map(n => n.split(',')[0].trim()).join(' / ');
+            const klubb = [...new Set(navnArr.map(n => (n.split(',')[1] || '').trim()).filter(Boolean))].join(' / ');
+            const erMeg = navnArr.some(n => navnParts2k.length >= 2
+              ? n.toLowerCase().includes(navnParts2k[0].toLowerCase()) && n.toLowerCase().includes(navnParts2k[navnParts2k.length - 1].toLowerCase())
+              : n.toLowerCase().includes(navnFull));
+            return { pos: parseInt(s[4]) || 0, navn, klubb, kV: s[7] || 0, kT: s[8] || 0, sV: s[9] || 0, sT: s[10] || 0, erMeg };
+          }).sort((a, b) => a.pos - b.pos);
+          if (spillereListe.length > 0) grupper2k.push({ disc: dc, ageGroup: '', spillere: spillereListe });
+
+          const rawKamper2k = pd.data[2] && Array.isArray(pd.data[2][0]) ? pd.data[2][0] : [];
+          for (const match of rawKamper2k) {
+            if (!Array.isArray(match)) continue;
+            const sp1 = spillerMap2k[match[8]] || [];
+            const sp2 = spillerMap2k[match[9]] || [];
+            const isSp1 = sp1.some(s => matchNavn2k(s.navn));
+            const isSp2 = sp2.some(s => matchNavn2k(s.navn));
+            if (!isSp1 && !isSp2) continue;
+            const motSpillere = isSp1 ? sp2 : sp1;
+            const mot = motSpillere.map(s => s.navn).join(' / ');
+            const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+            const rawTime = String(match[2] || '');
+            const tp = rawTime.trim().split(/\s+/);
+            let timeStr;
+            if (tp.length >= 2) {
+              const p0 = tp[0], p1 = tp[1];
+              if (/^\d{2}:\d{2}/.test(p0)) { timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5); }
+              else { timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5); }
+            } else { timeStr = tp[0] || ''; }
+            const scoreStr = String(match[3] || '').trim();
+            const vinner = match[5];
+            let res = '';
+            if (scoreStr) {
+              res = scoreStr.split(/\s+/).map(s => {
+                const pts = s.split('/');
+                return pts.length === 2 ? (isSp1 ? `${pts[0]}-${pts[1]}` : `${pts[1]}-${pts[0]}`) : s;
+              }).join(', ');
+            }
+            const vant = vinner ? (isSp1 ? vinner === 1 : vinner === 2) : null;
+            kamper2k.push({ tid: timeStr, bane: String(match[0] || ''), disc: dc, mot, motKlubb, motSpillere, ageGroup: '', res, vant });
+          }
+        }
+      }
+      kamper2k.sort((a, b) => (a.tid || '').localeCompare(b.tid || ''));
+      return json({ kamper: kamper2k, grupper: grupper2k });
+    }
+
     if (!classes.length) return json({ kamper: [] });
 
     // Steg 3: Per klasse — finn spillerens puljer, hent kamper per pulje
