@@ -143,15 +143,20 @@ async function handleRequest(request, env) {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
 
-    // Steg 1: Finn cup2000 tournamentId fra turneringsnavnet
+    // Steg 1: Finn cup2000 tournamentId — prøv URL først, deretter navnematching
     let cup2000Id = null;
-    if (body.tournamentNavn) {
+    if (body.cup2000Url) {
+      const m = body.cup2000Url.match(/tournamentid=(\d+)/i);
+      if (m) cup2000Id = m[1];
+    }
+    if (!cup2000Id && body.tournamentNavn) {
       const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       })).text();
-      const navnNorm = body.tournamentNavn.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const normStr = s => s.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
+      const navnNorm = normStr(body.tournamentNavn);
       for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
-        const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
+        const rowName = normStr(m[3]);
         if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
           cup2000Id = m[1];
           break;
@@ -525,13 +530,18 @@ async function handleRequest(request, env) {
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
 
     let cup2000Id = null;
-    if (body.tournamentNavn) {
+    if (body.cup2000Url) {
+      const m = body.cup2000Url.match(/tournamentid=(\d+)/i);
+      if (m) cup2000Id = m[1];
+    }
+    if (!cup2000Id && body.tournamentNavn) {
       const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       })).text();
-      const navnNorm = body.tournamentNavn.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const normStr2 = s => s.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
+      const navnNorm = normStr2(body.tournamentNavn);
       for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
-        const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
+        const rowName = normStr2(m[3]);
         if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
           cup2000Id = m[1]; break;
         }
