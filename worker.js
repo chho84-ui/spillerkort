@@ -135,7 +135,10 @@ async function handleRequest(request, env) {
     const BASE3 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA3 = { 'User-Agent': 'Mozilla/5.0' };
     const c2 = String(body.c || '0'), e2 = String(body.e || '0');
-    const raw2 = await (await fetch(BASE3 + '?tournamentid=' + cup2000Id2 + '&c=' + c2 + '&e=' + e2, { headers: UA3 })).text();
+    const p2 = body.p !== undefined ? '&p=' + body.p : '';
+    const g2 = body.g !== undefined ? '&g=' + body.g : '';
+    const e2param = body.e !== undefined ? '&e=' + e2 : '';
+    const raw2 = await (await fetch(BASE3 + '?tournamentid=' + cup2000Id2 + '&c=' + c2 + e2param + p2 + g2, { headers: UA3 })).text();
     return json({ cup2000Id: cup2000Id2, raw: raw2.substring(0, 3000) });
   }
 
@@ -211,6 +214,29 @@ async function handleRequest(request, env) {
           classes.push({ c, e, disc, ageGroup: '' });
         }
       }
+    }
+
+    // renderMethod=2 fra Cloudflare: cup2000.dk returnerer én klasse per c/e-kall.
+    // Skan alle kombinasjoner c=0..14, e=0..4 parallelt for å finne alle gyldige klasser.
+    if (!classes.length && navJson.renderMethod === 2) {
+      const scanPairs = [];
+      for (let sc = 0; sc <= 14; sc++) {
+        for (let se = 0; se <= 4; se++) {
+          scanPairs.push({ c: String(sc), e: String(se) });
+        }
+      }
+      const scanResults = await Promise.all(scanPairs.map(async ({ c, e }) => {
+        try {
+          const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
+          if (d.renderMethod === 2 && Array.isArray(d.data) && d.data[0] && d.data[0][2]) {
+            return { c, e, disc: decEnt(String(d.data[0][2])), ageGroup: '' };
+          }
+        } catch {}
+        return null;
+      }));
+      scanResults.filter(Boolean).forEach(r => {
+        if (!classes.some(x => x.c === r.c && x.e === r.e)) classes.push(r);
+      });
     }
 
     if (!classes.length) return json({ kamper: [] });
@@ -360,11 +386,16 @@ async function handleRequest(request, env) {
           : n.includes(navnFull);
       };
 
+      // Spiller er ikke i denne klassen — hopp over (unngår unødvendige subrequests)
+      if (minePuljer.length === 0) return { kamper: [], grupper: [] };
+
       // Hent kamper og gruppestandings for hver pulje
       const kamper = [];
       const grupper = [];
       for (const puljeId of minePuljer) {
-        const pd = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=0&g=${puljeId}`, { headers: UA })).json();
+        let pd;
+        try { pd = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=0&g=${puljeId}`, { headers: UA })).json(); }
+        catch(e) { continue; }
         if (!Array.isArray(pd.data) || pd.data.length < 3) continue;
 
         // pd.data[1] = standings: [playerIdx, ?, ?, ?, "pos", ["Navn, Klubb"], played, kV, kT, sV, sT, pV, pT, pts]
@@ -519,7 +550,7 @@ async function handleRequest(request, env) {
       return { kamper, grupper };
     };
 
-    const allResults = await Promise.all(classes.map(fetchClass));
+    const allResults = await Promise.all(classes.map(c => fetchClass(c).catch(() => ({ kamper: [], grupper: [] }))));
     const kamper = allResults.flatMap(r => r.kamper).sort((a, b) => (a.tid || '').localeCompare(b.tid || ''));
     const grupper = allResults.flatMap(r => r.grupper);
     return json({ kamper, grupper });
