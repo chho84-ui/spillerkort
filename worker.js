@@ -287,8 +287,65 @@ async function handleRequest(request, env) {
       if (!Array.isArray(d.data)) return { kamper: [], grupper: [] };
       const dc = discCode(disc);
 
-      // Sjekk om dette er direkte sluttspill-struktur (data[0] er string = tittel)
-      // I stedet for gruppespill (data[0] er array med puljer)
+      // renderMethod=3: klassen har kun én pulje — cup2000 returnerer puljedata direkte
+      // Skilles fra NM-knockout ved at tittelen inneholder "Pulje" OG data[1][0] har 7+ felt (standings).
+      // NM-knockout har data[1][0] med 4 felt (seedMap) og ingen "Pulje" i tittelen.
+      if (d.renderMethod === 3 && typeof d.data[0] === 'string' &&
+          (String(d.data[0]).includes('Pulje') || (Array.isArray(d.data[1]?.[0]) && d.data[1][0].length > 5))) {
+        const kamper = [];
+        const grupper = [];
+        const spillerMap = {};
+        for (const s of (d.data[1] || [])) {
+          const idx = s[0];
+          const navnArr = Array.isArray(s[5]) ? s[5].map(n => decEnt(String(n))) : [];
+          spillerMap[idx] = navnArr.map(n => ({ navn: n.split(',')[0].trim(), klubb: (n.split(',')[1] || '').trim() }));
+        }
+        const matchNavn3 = (navn) => {
+          const n = navn.toLowerCase();
+          const parts = navnFull.split(' ').filter(Boolean);
+          return parts.length >= 2 ? n.includes(parts[0]) && n.includes(parts[parts.length - 1]) : n.includes(navnFull);
+        };
+        const erMeg = Object.values(spillerMap).some(arr => arr.some(s => matchNavn3(s.navn)));
+        if (!erMeg) return { kamper: [], grupper: [] };
+        const rounds3 = Array.isArray(d.data[2]) && Array.isArray(d.data[2][0]) ? d.data[2][0] : [];
+        for (const match of rounds3) {
+          if (!Array.isArray(match)) continue;
+          const p1idx = match[8], p2idx = match[9];
+          const sp1list = spillerMap[p1idx] || [];
+          const sp2list = spillerMap[p2idx] || [];
+          const isSp1 = sp1list.some(s => matchNavn3(s.navn));
+          const isSp2 = sp2list.some(s => matchNavn3(s.navn));
+          if (!isSp1 && !isSp2) continue;
+          const motSpillere = isSp1 ? sp2list : sp1list;
+          const mot = motSpillere.map(s => s.navn).join(' / ');
+          const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
+          const rawTime = String(match[2] || '');
+          const tp = rawTime.trim().split(/\s+/);
+          let timeStr;
+          if (tp.length >= 2 && /^\d{2}:\d{2}/.test(tp[0])) timeStr = tp[1].substring(0, 5) + ' ' + tp[0].substring(0, 5);
+          else timeStr = tp[0] || '';
+          const bane = String(match[0] || '');
+          const scoreStr = String(match[3] || '').trim();
+          const vinner = match[5];
+          let res = '';
+          if (scoreStr) res = scoreStr.split(/\s+/).map(s => { const pts = s.split('/'); return pts.length === 2 ? (isSp1 ? `${pts[0]}-${pts[1]}` : `${pts[1]}-${pts[0]}`) : s; }).join(', ');
+          const vant = vinner ? (isSp1 ? vinner === 1 : vinner === 2) : null;
+          kamper.push({ tid: timeStr, bane, disc: dc, mot, motKlubb, motSpillere, ageGroup, res, vant });
+        }
+        // Standings
+        const navnParts = navnFull.split(' ').filter(Boolean);
+        const spillereListe = (d.data[1] || []).map(s => {
+          const navnArr = Array.isArray(s[5]) ? s[5].map(n => decEnt(String(n))) : [];
+          const navn = navnArr.map(n => n.split(',')[0].trim()).join(' / ');
+          const klubb = navnArr.map(n => (n.split(',')[1] || '').trim()).filter(Boolean)[0] || '';
+          const erMegS = navnArr.some(n => navnParts.every(p => n.toLowerCase().includes(p)));
+          return { pos: String(s[4] || ''), navn, klubb, kV: s[7] || 0, kT: s[8] || 0, sV: s[9] || 0, sT: s[10] || 0, erMeg: erMegS };
+        });
+        if (spillereListe.length) grupper.push({ disc: dc, ageGroup, spillere: spillereListe });
+        return { kamper, grupper };
+      }
+
+      // Sjekk om dette er direkte sluttspill-struktur (data[0] er string = tittel, ikke pulje)
       if (typeof d.data[0] === 'string') {
         // Direkte sluttspill: behandle d.data som spJson.data
         const kamper = [];
