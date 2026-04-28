@@ -1134,14 +1134,19 @@ function sendVarsel(btn, tournamentNavn, cup2000Url) {
   localStorage.setItem('sk_epost', email);
   btn.disabled = true;
   btn.textContent = 'Sender...';
-  fetch(PROXY + '/varsle', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email, tournamentNavn: tournamentNavn, cup2000Url: cup2000Url || '', navn: SN, klubb: SK })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  // Skriv direkte til Firestore (ingen worker-runde-tur nødvendig)
+  db.collection('varsler').add({
+    email: email,
+    tournamentNavn: tournamentNavn,
+    cup2000Url: cup2000Url || '',
+    navn: SN || '',
+    klubb: SK || '',
+    registrert: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
     var form = btn.closest('.sk-varsle-form');
     if (form) form.innerHTML = '<div style="font-size:12px;color:#7fffd4;padding:4px 0">\u2713 Vi varsler ' + email + ' når programmet er klart!</div>';
-  }).catch(function() {
+  }).catch(function(err) {
+    console.error('Varsle-feil:', err);
     btn.disabled = false;
     btn.textContent = 'Send varsel';
   });
