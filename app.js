@@ -944,6 +944,17 @@ function visTurnering(t) {
         var dc = groupKey.split('|')[0];
         // Prøv eksakt match (disc+ageGroup), fall tilbake til bare disc
         var regIdx = (groupKey in discToRegIdx) ? discToRegIdx[groupKey] : discToRegIdx[dc];
+        // Fallback for sammenslåtte doubles-klasser (f.eks. HD-klasse inkluderer DD/MD-spillere):
+        // Arrangøren kan slå sammen HD+DD til én "Herredouble"-klasse på cup2000, mens spilleren
+        // er påmeldt "Damedouble" på badmintonportalen. Da prøver vi andre doubles-varianter.
+        if (regIdx === undefined && (dc === 'HD' || dc === 'DD' || dc === 'MD')) {
+          var _dblOrder = ['HD', 'DD', 'MD'];
+          for (var _di = 0; _di < _dblOrder.length; _di++) {
+            if (_dblOrder[_di] !== dc && _dblOrder[_di] in discToRegIdx) {
+              regIdx = discToRegIdx[_dblOrder[_di]]; break;
+            }
+          }
+        }
         var kl = (regIdx !== undefined) ? document.getElementById('sk-kl-' + t.tournamentId + '-' + regIdx) : null;
         if (!kl && !pastKl) return;
         var entries = discGroups[groupKey];
