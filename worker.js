@@ -534,12 +534,14 @@ async function handleRequest(request, env) {
         if (spillereListe.length > 0) grupper.push({ disc: dc, ageGroup, spillere: spillereListe });
       }
 
-      // Sluttspill (knockout): hent p=1 (uten g)
+      // Sluttspill (knockout): hent p=1, p=2, p=3, ... til ingen data
       // Struktur: data[0]=tittel, data[1]=[[idx,?,pos,[navn]],...], data[2]=[[rundeId,[kamper]],...]
       // Kamp: [bane, ?, "HH:MM DD-MM-YYYY", scoreStr, ?, vinner(1/2), [], [], sp1idx, sp2idx, ...]
       try {
-        const spJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=1`, { headers: UA })).json();
-        if (Array.isArray(spJson.data) && spJson.data.length >= 3) {
+        for (let pNum = 1; pNum <= 10; pNum++) {
+          const spJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}&p=${pNum}`, { headers: UA })).json();
+          if (!Array.isArray(spJson.data) || spJson.data.length < 3 || typeof spJson.data[0] !== 'string') break;
+
           // Bygg seedMap fra data[1]: [idx, ?, pos, ["Navn, Klubb"]]
           const seedMap = {};
           for (const s of (spJson.data[1] || [])) {
