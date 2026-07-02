@@ -115,7 +115,51 @@ function hentFavoritterCache() {
     _favoritter = {};
     snap.forEach(function(doc) { _favoritter[doc.id] = doc.data(); });
     oppdaterStjerneknapp();
+    visHurtigvalg();
   });
+}
+
+// ── Hurtigvalg-chips (favoritter + sist brukte) i infoboksen ──────────────
+function lagreSiste(navn, klubb) {
+  var liste = [];
+  try { liste = JSON.parse(localStorage.getItem('sk_siste') || '[]'); } catch(e) {}
+  liste = liste.filter(function(p) { return p && p.navn && p.navn.toLowerCase() !== navn.toLowerCase(); });
+  liste.unshift({ navn: navn, klubb: klubb || '' });
+  if (liste.length > 5) liste = liste.slice(0, 5);
+  try { localStorage.setItem('sk_siste', JSON.stringify(liste)); } catch(e) {}
+}
+
+function visHurtigvalg() {
+  var boks = document.getElementById('infoboks');
+  if (!boks) return;
+  var siste = [];
+  try { siste = JSON.parse(localStorage.getItem('sk_siste') || '[]'); } catch(e) {}
+  var chips = [];
+  var sett = {};
+  Object.keys(_favoritter).forEach(function(k) {
+    var f = _favoritter[k];
+    if (!f || !f.navn) return;
+    var n = f.navn.toLowerCase();
+    if (!sett[n]) { sett[n] = 1; chips.push({ navn: f.navn, klubb: f.klubb || '', fav: true }); }
+  });
+  siste.forEach(function(s) {
+    if (!s || !s.navn) return;
+    var n = s.navn.toLowerCase();
+    if (!sett[n]) { sett[n] = 1; chips.push({ navn: s.navn, klubb: s.klubb || '', fav: false }); }
+  });
+  if (!chips.length) return; // ingen historikk — behold intro-teksten
+  chips = chips.slice(0, 8);
+  boks.innerHTML = '';
+  var rad = document.createElement('div');
+  rad.className = 'hurtig-rad';
+  chips.forEach(function(c) {
+    var chip = document.createElement('button');
+    chip.className = 'hurtig-chip' + (c.fav ? ' hurtig-chip-fav' : '');
+    chip.textContent = (c.fav ? '★ ' : '') + c.navn;
+    chip.onclick = function() { aapneMotstander(c.navn, c.klubb); };
+    rad.appendChild(chip);
+  });
+  boks.appendChild(rad);
 }
 
 function erFavoritt(playerId) {
@@ -1505,6 +1549,8 @@ function hent() {
     }
     SI = data.playerid;
     lagreHistorikk(SI, SN, SK);
+    lagreSiste(SN, SK);
+    visHurtigvalg();
     sett('Henter spillerinfo...');
     return Promise.all([hentRanking(), finnTurneringer()]).then(function(d) {
       if (gen !== _hentGen) return;
@@ -1536,6 +1582,7 @@ function hent() {
 
 window.onload = function() {
   laster();
+  visHurtigvalg();
   var n = document.getElementById('f-navn').value;
   if (n) hent();
 };

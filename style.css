@@ -151,3 +151,8 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 #infoboks { background: #12112a; border-bottom: 1px solid #0f3460; padding: 10px 16px; }
 #infoboks p { font-size: 12px; color: #888; line-height: 1.6; }
 #infoboks strong { color: #ccc; }
+.hurtig-rad { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.hurtig-rad::-webkit-scrollbar { display: none; }
+.hurtig-chip { flex-shrink: 0; background: #16213e; border: 1px solid #0f3460; color: #e0e0e0; border-radius: 21px; padding: 12px 16px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.hurtig-chip:hover, .hurtig-chip:active { border-color: #53d8fb; color: #53d8fb; }
+.hurtig-chip-fav { border-color: rgba(240,192,64,.45); }
