@@ -106,7 +106,7 @@ function loggInnGoogle() {
 }
 
 function loggUt() {
-  auth.signOut();
+  if (confirm('Vil du logge ut?')) auth.signOut();
 }
 
 function hentFavoritterCache() {
