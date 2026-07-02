@@ -64,8 +64,26 @@ async function lastStats() {
   status.style.display = 'block';
   table.style.display = 'none';
 
+  let token = localStorage.getItem('sk_stats_token');
+  if (!token) {
+    token = prompt('Stats-token:');
+    if (!token) {
+      status.textContent = 'Ingen token oppgitt.';
+      btn.disabled = false;
+      btn.textContent = 'Oppdater';
+      return;
+    }
+    localStorage.setItem('sk_stats_token', token);
+  }
+
   try {
-    const r = await fetch(WORKER + '/stats');
+    const r = await fetch(WORKER + '/stats', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (r.status === 401) {
+      localStorage.removeItem('sk_stats_token');
+      throw new Error('Feil token');
+    }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
 

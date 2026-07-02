@@ -1,3 +1,6 @@
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttrJs(s) { return esc(String(s == null ? '' : s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")); }
+
 // ── Firebase ──────────────────────────────────────────────────────────────
 var firebaseConfig = {
   apiKey: "AIzaSyBxavzk2kA1MHbYWhrEhlW9vcIm8wO691Q",
@@ -177,9 +180,9 @@ function visFavoritter() {
     if (snap.empty) { el.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:8px">Ingen favoritter ennå</div>'; return; }
     el.innerHTML = snap.docs.map(function(doc) {
       var d = doc.data();
-      return '<div class="sk-fav-rad" onclick="aapneMotstander(\'' + d.navn.replace(/'/g, "\\'") + '\',\'' + (d.klubb||'').replace(/'/g, "\\'") + '\');document.getElementById(\'sk-fav-overlay\').remove()">'
-        + '<span class="sk-fav-navn">' + d.navn + '</span>'
-        + '<span class="sk-fav-klubb">' + (d.klubb || '') + '</span>'
+      return '<div class="sk-fav-rad" onclick="aapneMotstander(\'' + escAttrJs(d.navn) + '\',\'' + escAttrJs(d.klubb||'') + '\');document.getElementById(\'sk-fav-overlay\').remove()">'
+        + '<span class="sk-fav-navn">' + esc(d.navn) + '</span>'
+        + '<span class="sk-fav-klubb">' + esc(d.klubb || '') + '</span>'
         + '</div>';
     }).join('');
   });
@@ -190,9 +193,9 @@ function visFavoritter() {
     if (snap.empty) { el.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:8px">Ingen historikk ennå</div>'; return; }
     el.innerHTML = snap.docs.map(function(doc) {
       var d = doc.data();
-      return '<div class="sk-fav-rad" onclick="aapneMotstander(\'' + d.navn.replace(/'/g, "\\'") + '\',\'' + (d.klubb||'').replace(/'/g, "\\'") + '\');document.getElementById(\'sk-fav-overlay\').remove()">'
-        + '<span class="sk-fav-navn">' + d.navn + '</span>'
-        + '<span class="sk-fav-klubb">' + (d.klubb || '') + '</span>'
+      return '<div class="sk-fav-rad" onclick="aapneMotstander(\'' + escAttrJs(d.navn) + '\',\'' + escAttrJs(d.klubb||'') + '\');document.getElementById(\'sk-fav-overlay\').remove()">'
+        + '<span class="sk-fav-navn">' + esc(d.navn) + '</span>'
+        + '<span class="sk-fav-klubb">' + esc(d.klubb || '') + '</span>'
         + '</div>';
     }).join('');
   });
@@ -302,8 +305,8 @@ function visDropdown(spillere) {
   _acValgt = -1;
   dd.innerHTML = spillere.map(function(s, i) {
     return '<div class="ac-item" onmousedown="velgSpiller(' + i + ')">'
-      + '<span class="ac-navn">' + s.navn + '</span>'
-      + '<span class="ac-klubb">' + (s.klubb || '') + '</span>'
+      + '<span class="ac-navn">' + esc(s.navn) + '</span>'
+      + '<span class="ac-klubb">' + esc(s.klubb || '') + '</span>'
       + '</div>';
   }).join('');
   dd.style.display = 'block';
@@ -710,9 +713,9 @@ function visRanking(rows) {
   for (var i = 0; i < rows.length; i++) {
     var c = document.createElement('div');
     c.className = 'sk-chip';
-    var inner = '<div class="r-d">' + rows[i].disiplin + '</div>'
-      + '<div class="r-k">' + rows[i].klasse + '</div>'
-      + '<div class="r-p">#' + rows[i].plass + '</div>';
+    var inner = '<div class="r-d">' + esc(rows[i].disiplin) + '</div>'
+      + '<div class="r-k">' + esc(rows[i].klasse) + '</div>'
+      + '<div class="r-p">#' + esc(rows[i].plass) + '</div>';
     var chipUrl = rows[i].url || 'https://badmintonportalen.no/NBF/Ranglister/';
     c.style.cursor = 'pointer';
     c.title = 'Åpne rankingliste';
@@ -722,15 +725,24 @@ function visRanking(rows) {
   }
 }
 
+function justerAarsskifte(d) {
+  if (!d) return d;
+  var seksMndMs = 183 * 24 * 60 * 60 * 1000;
+  var diff = d.getTime() - Date.now();
+  if (diff < -seksMndMs) d.setFullYear(d.getFullYear() + 1);
+  else if (diff > seksMndMs) d.setFullYear(d.getFullYear() - 1);
+  return d;
+}
+
 function parseTid(tid) {
   if (!tid) return null;
   var yr = new Date().getFullYear();
   // "DD-MM HH:MM"
   var m = tid.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-  if (m) return new Date(yr, parseInt(m[2])-1, parseInt(m[1]), parseInt(m[3]), parseInt(m[4]));
+  if (m) return justerAarsskifte(new Date(yr, parseInt(m[2])-1, parseInt(m[1]), parseInt(m[3]), parseInt(m[4])));
   // "HH:MM DD-MM" (gammelt cache-format)
   var m2 = tid.match(/^(\d{2}):(\d{2})\s+(\d{2})-(\d{2})/);
-  if (m2) return new Date(yr, parseInt(m2[4])-1, parseInt(m2[3]), parseInt(m2[1]), parseInt(m2[2]));
+  if (m2) return justerAarsskifte(new Date(yr, parseInt(m2[4])-1, parseInt(m2[3]), parseInt(m2[1]), parseInt(m2[2])));
   return null;
 }
 
@@ -762,8 +774,8 @@ function visTurnering(t) {
   var _mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
   var _dp = (t.dato || '').split('.');
   var _turDato = t.dager ? t.dager.replace(/\.\s*$/, '') + '. ' + (_dp[1] ? _mnd[parseInt(_dp[1])-1] : '') + (_dp[2] ? ' ' + _dp[2] : '') : (t.dato || '');
-  var liveKnappHtml = t.isPast ? '' : ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + (t.navn||'').replace(/'/g,"\\'") + '\')">📋 Live</button>';
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + _turDato + ' \u2014 ' + (t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
+  var liveKnappHtml = t.isPast ? '' : ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + escAttrJs(t.navn||'') + '\')">📋 Live</button>';
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
@@ -776,8 +788,8 @@ function visTurnering(t) {
         makkerHtml = '<span class="sk-makker">(uten makker)</span>';
       } else {
         var makkerNavn = r.makkere.map(function(m) {
-          return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + m.navn.replace(/'/g, "\\'") + '\',\'' + (m.klubb||'').replace(/'/g, "\\'") + '\')">' + m.navn + '</span>'
-            + (m.klubb ? ' <span style="opacity:.7">(' + m.klubb + ')</span>' : '');
+          return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + escAttrJs(m.navn) + '\',\'' + escAttrJs(m.klubb||'') + '\')">' + esc(m.navn) + '</span>'
+            + (m.klubb ? ' <span style="opacity:.7">(' + esc(m.klubb) + ')</span>' : '');
         }).join(', ');
         makkerHtml = '<span class="sk-makker">m ' + makkerNavn
           + ' <span class="sk-rank-mini" id="sk-mkr-' + t.tournamentId + '-' + i + '"></span></span>';
@@ -785,7 +797,7 @@ function visTurnering(t) {
     }
     rh += '<div class="sk-row">'
       + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
-      + '<span class="sk-disc">' + r.disiplin + '</span>'
+      + '<span class="sk-disc">' + esc(r.disiplin) + '</span>'
       + makkerHtml
       + '</div>'
       + '<div id="sk-kl-' + t.tournamentId + '-' + i + '" class="sk-kamplist">'
@@ -885,9 +897,9 @@ function visTurnering(t) {
             var rh = '<div style="font-size:10px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Resultater</div>';
             alle.forEach(function(b) {
               rh += '<div class="sk-row">'
-                + '<span class="sk-disc">' + b.disc + '</span>'
-                + '<span style="margin-left:8px;color:#7fffd4;font-weight:bold">' + (b.plass ? '#' + b.plass : '') + '</span>'
-                + (b.poeng ? '<span style="margin-left:6px;font-size:11px;color:#aaa">' + b.poeng + 'p</span>' : '')
+                + '<span class="sk-disc">' + esc(b.disc) + '</span>'
+                + '<span style="margin-left:8px;color:#7fffd4;font-weight:bold">' + (b.plass ? '#' + esc(b.plass) : '') + '</span>'
+                + (b.poeng ? '<span style="margin-left:6px;font-size:11px;color:#aaa">' + esc(b.poeng) + 'p</span>' : '')
                 + '</div>';
             });
             el.innerHTML = rh;
@@ -993,24 +1005,24 @@ function visTurnering(t) {
           }
           kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + (k.sluttspill ? ' sk-kamp-sluttspill' : '') + '">'
             + '<span class="sk-kamp-tid">' + tidKl + '</span>'
-            + '<span class="sk-kamp-bane">' + (k.bane || '') + '</span>'
+            + '<span class="sk-kamp-bane">' + esc(k.bane || '') + '</span>'
             + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
             + (function(kp, kpi) {
                 if ((kp.mot || '').indexOf('Vinner av ') === 0) {
-                  return '<span style="font-size:11px;color:#888;font-style:italic">' + kp.mot + '</span>';
+                  return '<span style="font-size:11px;color:#888;font-style:italic">' + esc(kp.mot) + '</span>';
                 }
                 var spillere = kp.motSpillere && kp.motSpillere.length > 1 ? kp.motSpillere : null;
                 if (spillere) {
                   return spillere.map(function(s, si) {
                     return '<span id="sk-mot-' + t.tournamentId + '-' + kpi + '-p' + si
-                      + '" class="sk-mot-link" onclick="aapneMotstander(\'' + s.navn.replace(/'/g, "\\'") + '\',\'' + (s.klubb||'').replace(/'/g, "\\'") + '\')">' + s.navn + '</span>';
+                      + '" class="sk-mot-link" onclick="aapneMotstander(\'' + escAttrJs(s.navn) + '\',\'' + escAttrJs(s.klubb||'') + '\')">' + esc(s.navn) + '</span>';
                   }).join(' ');
                 }
-                return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + (kp.mot||'').replace(/'/g, "\\'") + '\',\'' + (kp.motKlubb||'').replace(/'/g, "\\'") + '\')">' + (kp.mot || '') + '</span>';
+                return '<span class="sk-mot-link" onclick="aapneMotstander(\'' + escAttrJs(kp.mot||'') + '\',\'' + escAttrJs(kp.motKlubb||'') + '\')">' + esc(kp.mot || '') + '</span>';
               })(k, ki)
-            + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + k.motKlubb + '</span>' : '')
+            + (k.motKlubb ? '<span class="sk-kamp-mot-sub">' + esc(k.motKlubb) + '</span>' : '')
             + '</span>'
-            + (k.res ? '<span class="sk-kamp-res" style="' + (k.vant === true ? 'color:#7fffd4' : k.vant === false ? 'color:#e94560' : '') + '">' + k.res + '</span>' : '')
+            + (k.res ? '<span class="sk-kamp-res" style="' + (k.vant === true ? 'color:#7fffd4' : k.vant === false ? 'color:#e94560' : '') + '">' + esc(k.res) + '</span>' : '')
             + '</div>';
         }
         if (kl) {
@@ -1114,8 +1126,8 @@ function visVarsleSkjema(tournamentNavn, cup2000Url, container) {
   var form = document.createElement('div');
   form.className = 'sk-varsle-form';
   form.innerHTML = '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Få e-post når kampprogram er tilgjengelig</div>'
-    + '<input type="email" id="sk-varsle-epost" placeholder="din@epost.no" value="' + lagretEpost.replace(/"/g, '') + '">'
-    + '<button class="sk-varsle-send" onclick="sendVarsel(this,\'' + tournamentNavn.replace(/'/g, "\\'") + '\',\'' + (cup2000Url||'').replace(/'/g, "\\'") + '\')">Send varsel</button>';
+    + '<input type="email" id="sk-varsle-epost" placeholder="din@epost.no" value="' + esc(lagretEpost) + '">'
+    + '<button class="sk-varsle-send" onclick="sendVarsel(this,\'' + escAttrJs(tournamentNavn) + '\',\'' + escAttrJs(cup2000Url||'') + '\')">Send varsel</button>';
   // Fjern eksisterende varsle-knapper i denne containeren
   var existing = container.querySelectorAll('.sk-varsle-btn, .sk-varsle-mini, .sk-varsle-form');
   existing.forEach(function(el) { el.remove(); });
@@ -1134,17 +1146,22 @@ function sendVarsel(btn, tournamentNavn, cup2000Url) {
   localStorage.setItem('sk_epost', email);
   btn.disabled = true;
   btn.textContent = 'Sender...';
-  // Skriv direkte til Firestore (ingen worker-runde-tur nødvendig)
-  db.collection('varsler').add({
-    email: email,
-    tournamentNavn: tournamentNavn,
-    cup2000Url: cup2000Url || '',
-    navn: SN || '',
-    klubb: SK || '',
-    registrert: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function() {
+  fetch(PROXY + '/varsle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: email,
+      tournamentNavn: tournamentNavn,
+      cup2000Url: cup2000Url || '',
+      navn: SN || '',
+      klubb: SK || ''
+    })
+  }).then(function(r) {
+    return r.json().then(function(d) { return { ok: r.ok, d: d }; });
+  }).then(function(res) {
+    if (!res.ok || !res.d || !res.d.ok) throw new Error('varsle-feil');
     var form = btn.closest('.sk-varsle-form');
-    if (form) form.innerHTML = '<div style="font-size:12px;color:#7fffd4;padding:4px 0">\u2713 Vi varsler ' + email + ' når programmet er klart!</div>';
+    if (form) form.innerHTML = '<div style="font-size:12px;color:#7fffd4;padding:4px 0">\u2713 Vi varsler ' + esc(email) + ' når programmet er klart!</div>';
   }).catch(function(err) {
     console.error('Varsle-feil:', err);
     btn.disabled = false;
@@ -1164,10 +1181,10 @@ function visGruppe(g) {
   function gruppefaseHTML() {
     var rows = g.spillere.map(function(s) {
       return '<tr class="' + (s.erMeg ? 'meg' : '') + '">'
-        + '<td class="pos">' + s.pos + '</td>'
-        + '<td>' + s.navn + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + s.klubb + '</span>' : '') + '</td>'
-        + '<td class="score">' + s.kV + '-' + s.kT + '</td>'
-        + '<td class="score">' + s.sV + '-' + s.sT + '</td>'
+        + '<td class="pos">' + esc(s.pos) + '</td>'
+        + '<td>' + esc(s.navn) + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + esc(s.klubb) + '</span>' : '') + '</td>'
+        + '<td class="score">' + esc(s.kV) + '-' + esc(s.kT) + '</td>'
+        + '<td class="score">' + esc(s.sV) + '-' + esc(s.sT) + '</td>'
         + '</tr>';
     }).join('');
     return '<div style="font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Gruppefase</div>'
@@ -1181,9 +1198,9 @@ function visGruppe(g) {
     var rows = sluttRows.map(function(s) {
       var erMeg = s.navn.toLowerCase().indexOf(navnLower) !== -1;
       return '<tr class="' + (erMeg ? 'meg' : '') + '">'
-        + '<td class="pos">' + (s.plass || '') + '</td>'
-        + '<td>' + s.navn + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + s.klubb + '</span>' : '') + '</td>'
-        + '<td class="score">' + (s.poeng ? s.poeng + 'p' : '') + '</td>'
+        + '<td class="pos">' + esc(s.plass || '') + '</td>'
+        + '<td>' + esc(s.navn) + (s.klubb ? '<br><span style="font-size:10px;color:#888">' + esc(s.klubb) + '</span>' : '') + '</td>'
+        + '<td class="score">' + (s.poeng ? esc(s.poeng) + 'p' : '') + '</td>'
         + '</tr>';
     }).join('');
     return '<div style="font-size:10px;color:#888;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.05em">Sluttresultat</div>'
@@ -1203,7 +1220,7 @@ function visGruppe(g) {
 
   overlay.innerHTML = '<div class="sk-gruppe-panel">'
     + '<div class="sk-gruppe-hdr">'
-    + '<span class="sk-gruppe-tittel">' + g.disc + ' ' + g.ageGroup + ' \u2014 Gruppestilling</span>'
+    + '<span class="sk-gruppe-tittel">' + esc(g.disc) + ' ' + esc(g.ageGroup) + ' \u2014 Gruppestilling</span>'
     + '<button class="sk-gruppe-xbtn" onclick="lukkGruppe()">\u2715</button>'
     + '</div>'
     + '<div class="sk-gruppe-innhold">' + gruppefaseHTML() + '</div>'
@@ -1276,7 +1293,7 @@ function visLive(tournamentId, tournamentNavn) {
   overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
     + '<div class="sk-gruppe-hdr">'
     + '<span class="sk-gruppe-tittel">📋 Kamper nå</span>'
-    + '<button class="sk-live-refresh-btn" id="sk-live-refresh" onclick="oppdaterLive(\'' + tournamentNavn.replace(/'/g, "\\'") + '\')">↻</button>'
+    + '<button class="sk-live-refresh-btn" id="sk-live-refresh" onclick="oppdaterLive(\'' + escAttrJs(tournamentNavn) + '\')">↻</button>'
     + '<button class="sk-gruppe-xbtn" onclick="lukkLive()">✕</button>'
     + '</div>'
     + '<div id="sk-live-innhold" style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>'
@@ -1310,7 +1327,7 @@ function renderLiveInnhold(data) {
   for (var bi = 0; bi < baneRekkefølge.length; bi++) {
     var bane = baneRekkefølge[bi];
     var baneKamper = baneMap[bane];
-    html += '<div class="sk-live-bane"><div class="sk-live-bane-hdr">Bane ' + bane + '</div>';
+    html += '<div class="sk-live-bane"><div class="sk-live-bane-hdr">Bane ' + esc(bane) + '</div>';
 
     for (var ki = 0; ki < baneKamper.length; ki++) {
       var k = baneKamper[ki];
@@ -1330,14 +1347,14 @@ function renderLiveInnhold(data) {
           + '</div>';
       }
 
-      var sp1 = (k.spiller1 || []).map(function(s) { return s.navn; }).join(' / ');
-      var sp2 = (k.spiller2 || []).map(function(s) { return s.navn; }).join(' / ');
+      var sp1 = (k.spiller1 || []).map(function(s) { return esc(s.navn); }).join(' / ');
+      var sp2 = (k.spiller2 || []).map(function(s) { return esc(s.navn); }).join(' / ');
 
       html += '<div class="sk-live-kamp' + (k.mine ? ' sk-live-kamp-mine' : '') + (isLive ? ' sk-live-kamp-live' : '') + '">'
         + '<div class="sk-live-kamp-top">'
-        + '<span class="sk-live-disc">' + (k.disc || '') + ' ' + (k.ageGroup || '') + '</span>'
+        + '<span class="sk-live-disc">' + esc(k.disc || '') + ' ' + esc(k.ageGroup || '') + '</span>'
         + statusHtml
-        + '<span class="sk-live-tid">' + (k.tid ? k.tid.substring(0,5) : '') + '</span>'
+        + '<span class="sk-live-tid">' + esc(k.tid ? k.tid.substring(0,5) : '') + '</span>'
         + '</div>'
         + '<div class="sk-live-sp' + (k.mine ? ' sk-live-sp-mine' : '') + '">' + sp1 + '</div>'
         + '<div class="sk-live-vs">vs</div>'
@@ -1381,7 +1398,7 @@ function hent() {
   SN = document.getElementById('f-navn').value.trim();
   SK = document.getElementById('f-klubb').value.trim();
 
-  if (!SN || !SK) { sett('Fyll inn navn og klubb.'); return; }
+  if (!SN) { sett('Fyll inn spillernavn.'); return; }
 
   lagre();
 
@@ -1440,6 +1457,5 @@ function hent() {
 window.onload = function() {
   laster();
   var n = document.getElementById('f-navn').value;
-  var k = document.getElementById('f-klubb').value;
-  if (n && k) hent();
+  if (n) hent();
 };

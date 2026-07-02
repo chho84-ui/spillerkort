@@ -30,6 +30,59 @@ function json(data, status) {
   });
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function finnCup2000Id(body) {
+  let cup2000Id = null;
+  if (body.cup2000Url) {
+    const m = body.cup2000Url.match(/tournamentid=(\d+)/i);
+    if (m) cup2000Id = m[1];
+  }
+  if (!cup2000Id && body.tournamentNavn) {
+    const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    })).text();
+    const normStr = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
+    const navnNorm = normStr(body.tournamentNavn);
+    for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
+      const rowName = normStr(m[3]);
+      if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
+        cup2000Id = m[1];
+        break;
+      }
+    }
+  }
+  return cup2000Id;
+}
+
+function parseKampTid(raw) {
+  const rawTime = String(raw || '');
+  const tp = rawTime.trim().split(/\s+/);
+  let timeStr;
+  if (tp.length >= 2) {
+    const p0 = tp[0], p1 = tp[1];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(p0)) {
+      // ISO "YYYY-MM-DD HH:MM" → "DD-MM HH:MM"
+      const dp2 = p0.split('-');
+      timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1.substring(0, 5);
+    } else if (/^\d{2}:\d{2}/.test(p0)) {
+      // "HH:MM DD-MM-YYYY" eller "HH:MM DD-MM" → "DD-MM HH:MM"
+      timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5);
+    } else {
+      timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5);
+    }
+  } else {
+    timeStr = tp[0] || '';
+  }
+  return timeStr;
+}
+
 async function handleRequest(request, env) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS });
@@ -93,6 +146,8 @@ async function handleRequest(request, env) {
   if (path === '/api') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
+    const TILLATTE_METODER = ['SearchPlayer', 'GetPlayerProfile', 'GetSeasonPlan', 'SearchRegistrationsByClass', 'SearchTournamentResults'];
+    if (!TILLATTE_METODER.includes(body.method)) return json({error: 'Metode ikke tillatt'}, 403);
     const ctx = await getCtx();
     if (!ctx) return json({error: 'Kunne ikke hente session fra badmintonportalen.no'}, 500);
     body.data.callbackcontextkey = ctx;
@@ -108,6 +163,7 @@ async function handleRequest(request, env) {
   if (path === '/app') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
+    if (body.command !== 18) return json({error: 'Metode ikke tillatt'}, 403);
     const r = await fetch('https://badmintonportalen.no/SportsResults/Services/App.aspx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -147,25 +203,7 @@ async function handleRequest(request, env) {
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
 
     // Steg 1: Finn cup2000 tournamentId — prøv URL først, deretter navnematching
-    let cup2000Id = null;
-    if (body.cup2000Url) {
-      const m = body.cup2000Url.match(/tournamentid=(\d+)/i);
-      if (m) cup2000Id = m[1];
-    }
-    if (!cup2000Id && body.tournamentNavn) {
-      const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      })).text();
-      const normStr = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
-      const navnNorm = normStr(body.tournamentNavn);
-      for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
-        const rowName = normStr(m[3]);
-        if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
-          cup2000Id = m[1];
-          break;
-        }
-      }
-    }
+    const cup2000Id = await finnCup2000Id(body);
     if (!cup2000Id) return json({ kamper: [] });
 
     const BASE = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
@@ -217,26 +255,38 @@ async function handleRequest(request, env) {
     }
 
     // renderMethod=2 fra Cloudflare: cup2000.dk returnerer én klasse per c/e-kall.
-    // Skan alle kombinasjoner c=0..14, e=0..4 parallelt for å finne alle gyldige klasser.
+    // Skan sekvensielt per c (e=0..4 parallelt per c) for å holde oss innenfor
+    // Cloudflare free plans grense på 50 subrequests per request (det kommer flere
+    // kall per klasse etterpå). Klassene ligger sammenhengende, men trenger ikke
+    // starte på c=0 — derfor avbrytes først på en tom rad ETTER at noe er funnet.
+    // Hardt tak på 35 kall totalt i skanningen.
     if (!classes.length && navJson.renderMethod === 2) {
-      const scanPairs = [];
-      for (let sc = 0; sc <= 14; sc++) {
-        for (let se = 0; se <= 4; se++) {
-          scanPairs.push({ c: String(sc), e: String(se) });
-        }
+      const MAKS_SKANN_KALL = 35;
+      let skannKall = 0;
+      for (let sc = 0; sc <= 14 && skannKall < MAKS_SKANN_KALL; sc++) {
+        const ePairs = [];
+        for (let se = 0; se <= 4; se++) ePairs.push(se);
+        const gjenstaende = MAKS_SKANN_KALL - skannKall;
+        const radePairs = ePairs.slice(0, gjenstaende);
+        if (!radePairs.length) break;
+        skannKall += radePairs.length;
+        const c = String(sc);
+        const scanResults = await Promise.all(radePairs.map(async (se) => {
+          const e = String(se);
+          try {
+            const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
+            if (d.renderMethod === 2 && Array.isArray(d.data) && d.data[0] && d.data[0][2]) {
+              return { c, e, disc: decEnt(String(d.data[0][2])), ageGroup: '' };
+            }
+          } catch {}
+          return null;
+        }));
+        const funnet = scanResults.filter(Boolean);
+        funnet.forEach(r => {
+          if (!classes.some(x => x.c === r.c && x.e === r.e)) classes.push(r);
+        });
+        if (!funnet.length && classes.length) break;
       }
-      const scanResults = await Promise.all(scanPairs.map(async ({ c, e }) => {
-        try {
-          const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
-          if (d.renderMethod === 2 && Array.isArray(d.data) && d.data[0] && d.data[0][2]) {
-            return { c, e, disc: decEnt(String(d.data[0][2])), ageGroup: '' };
-          }
-        } catch {}
-        return null;
-      }));
-      scanResults.filter(Boolean).forEach(r => {
-        if (!classes.some(x => x.c === r.c && x.e === r.e)) classes.push(r);
-      });
     }
 
     if (!classes.length) return json({ kamper: [] });
@@ -277,11 +327,7 @@ async function handleRequest(request, env) {
           const motSpillere = isSp1 ? sp2list : sp1list;
           const mot = motSpillere.map(s => s.navn).join(' / ');
           const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
-          const rawTime = String(match[2] || '');
-          const tp = rawTime.trim().split(/\s+/);
-          let timeStr;
-          if (tp.length >= 2 && /^\d{2}:\d{2}/.test(tp[0])) timeStr = tp[1].substring(0, 5) + ' ' + tp[0].substring(0, 5);
-          else timeStr = tp[0] || '';
+          const timeStr = parseKampTid(match[2]);
           const bane = String(match[0] || '');
           const scoreStr = String(match[3] || '').trim();
           const vinner = match[5];
@@ -387,14 +433,7 @@ async function handleRequest(request, env) {
               mot = motSpillere.map(s => s.navn).join(' / ');
               motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
             }
-            const rawTime = String(match[2] || '');
-            const tp = rawTime.trim().split(/\s+/);
-            let timeStr;
-            if (tp.length >= 2) {
-              const p0 = tp[0], p1 = tp[1];
-              if (/^\d{2}:\d{2}/.test(p0)) { timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5); }
-              else { timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5); }
-            } else { timeStr = tp[0] || ''; }
+            const timeStr = parseKampTid(match[2]);
             const bane = String(match[0] || '');
             const scoreStr = String(match[3] || '').trim();
             const vinner = match[5];
@@ -482,24 +521,7 @@ async function handleRequest(request, env) {
           const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
 
           // Tidsformat: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
-          const rawTime = String(match[2] || '');
-          const tp = rawTime.trim().split(/\s+/);
-          let timeStr;
-          if (tp.length >= 2) {
-            const p0 = tp[0], p1 = tp[1];
-            if (/^\d{4}-\d{2}-\d{2}$/.test(p0)) {
-              // ISO "YYYY-MM-DD HH:MM" → "DD-MM HH:MM"
-              const dp2 = p0.split('-');
-              timeStr = dp2[2] + '-' + dp2[1] + ' ' + p1.substring(0, 5);
-            } else if (/^\d{2}:\d{2}/.test(p0)) {
-              // "HH:MM DD-MM-YYYY" eller "HH:MM DD-MM" → "DD-MM HH:MM"
-              timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5);
-            } else {
-              timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5);
-            }
-          } else {
-            timeStr = tp[0] || '';
-          }
+          const timeStr = parseKampTid(match[2]);
           const bane = String(match[0] || '');
 
           // Resultat: match[3] = scoreStr "4/21 6/21"
@@ -570,19 +592,7 @@ async function handleRequest(request, env) {
               const motKlubb = [...new Set(motSpillere.map(s => s.klubb).filter(Boolean))].join(' / ');
 
               // Tid: "HH:MM DD-MM-YYYY"
-              const rawTime = String(match[2] || '');
-              const tp = rawTime.trim().split(/\s+/);
-              let timeStr;
-              if (tp.length >= 2) {
-                const p0 = tp[0], p1 = tp[1];
-                if (/^\d{2}:\d{2}/.test(p0)) {
-                  timeStr = p1.substring(0, 5) + ' ' + p0.substring(0, 5);
-                } else {
-                  timeStr = p0.substring(0, 5) + ' ' + p1.substring(0, 5);
-                }
-              } else {
-                timeStr = tp[0] || '';
-              }
+              const timeStr = parseKampTid(match[2]);
               const bane = String(match[0] || '');
 
               // Score: "21/9 21/18" — vinner er match[5]: 1=sp1, 2=sp2
@@ -617,24 +627,7 @@ async function handleRequest(request, env) {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
 
-    let cup2000Id = null;
-    if (body.cup2000Url) {
-      const m = body.cup2000Url.match(/tournamentid=(\d+)/i);
-      if (m) cup2000Id = m[1];
-    }
-    if (!cup2000Id && body.tournamentNavn) {
-      const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      })).text();
-      const normStr2 = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
-      const navnNorm = normStr2(body.tournamentNavn);
-      for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
-        const rowName = normStr2(m[3]);
-        if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
-          cup2000Id = m[1]; break;
-        }
-      }
-    }
+    const cup2000Id = await finnCup2000Id(body);
     if (!cup2000Id) return json({ kamper: [] });
 
     const BASE2 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
@@ -692,6 +685,9 @@ async function handleRequest(request, env) {
   }
 
   if (path === '/stats') {
+    const authHeader = request.headers.get('Authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token || token !== env.STATS_TOKEN) return json({error: 'Unauthorized'}, 401);
     const account_id = 'b88a9b1ba068ad113b6ed1b8266d3587';
     const query = `
       SELECT blob1 as navn, blob2 as klubb, blob3 as resultat, count() as antall
@@ -705,7 +701,7 @@ async function handleRequest(request, env) {
     const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account_id}/analytics_engine/sql`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${CF_ANALYTICS_TOKEN}`,
+        'Authorization': `Bearer ${env.CF_ANALYTICS_TOKEN}`,
         'Content-Type': 'text/plain'
       },
       body: query
@@ -722,26 +718,26 @@ async function handleRequest(request, env) {
     if (!email || !tournamentNavn) return json({error: 'Mangler felt'}, 400);
 
     const key = `varsle:${tournamentNavn}:${email}`;
-    await VARSLER.put(key, JSON.stringify({ email, tournamentNavn, cup2000Url: cup2000Url || '', navn: navn || '', klubb: klubb || '', registrert: Date.now() }), { expirationTtl: 60 * 60 * 24 * 30 });
+    await env.VARSLER.put(key, JSON.stringify({ email, tournamentNavn, cup2000Url: cup2000Url || '', navn: navn || '', klubb: klubb || '', registrert: Date.now() }), { expirationTtl: 60 * 60 * 24 * 30 });
     return json({ok: true});
   }
 
   return new Response('Not found', { status: 404, headers: CORS });
 }
 
-async function sendResend(email, fornavn, tournamentNavn) {
+async function sendResend(email, fornavn, tournamentNavn, env) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${RESEND_API_KEY}`
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`
     },
     body: JSON.stringify({
       from: 'Goodminton <noreply@send.goodminton.no>',
       to: [email],
       subject: `Kampprogram klart \u2013 ${tournamentNavn}`,
-      html: `<p>Hei${fornavn ? ' ' + fornavn : ''}!</p>
-<p>Kamprogrammet for <strong>${tournamentNavn}</strong> er n\u00e5 tilgjengelig.</p>
+      html: `<p>Hei${fornavn ? ' ' + escapeHtml(fornavn) : ''}!</p>
+<p>Kamprogrammet for <strong>${escapeHtml(tournamentNavn)}</strong> er n\u00e5 tilgjengelig.</p>
 <p><a href="https://goodminton.no">Åpne goodminton.no</a> for \u00e5 se kampene dine.</p>
 <p style="color:#888;font-size:12px">Du mottar denne e-posten fordi du ba om varsel p\u00e5 goodminton.no.</p>`
     })
@@ -751,23 +747,7 @@ async function sendResend(email, fornavn, tournamentNavn) {
 
 async function cup2000HarKamper(tournamentNavn, cup2000Url) {
   // Finn cup2000 tournamentId
-  let cup2000Id = null;
-  if (cup2000Url) {
-    const m = cup2000Url.match(/tournamentid=(\d+)/i);
-    if (m) cup2000Id = m[1];
-  }
-  if (!cup2000Id && tournamentNavn) {
-    const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    })).text();
-    const navnNorm = tournamentNavn.replace(/^[^:]+:\s*/, '').toLowerCase().replace(/\s+/g, ' ').trim();
-    for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
-      const rowName = m[3].toLowerCase().replace(/\s+/g, ' ').trim();
-      if (rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) {
-        cup2000Id = m[1]; break;
-      }
-    }
-  }
+  const cup2000Id = await finnCup2000Id({ tournamentNavn, cup2000Url });
   if (!cup2000Id) return false;
 
   const BASE = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
@@ -785,18 +765,14 @@ async function cup2000HarKamper(tournamentNavn, cup2000Url) {
   return false;
 }
 
-addEventListener('scheduled', function(event) {
-  event.waitUntil(handleScheduled());
-});
-
-async function handleScheduled() {
-  const list = await VARSLER.list({ prefix: 'varsle:' });
+async function handleScheduled(env) {
+  const list = await env.VARSLER.list({ prefix: 'varsle:' });
   if (!list.keys.length) return;
 
   // Grupper per turnering for å unngå å sjekke cup2000 flere ganger
   const turneringer = {};
   for (const key of list.keys) {
-    const val = await VARSLER.get(key.name, { type: 'json' });
+    const val = await env.VARSLER.get(key.name, { type: 'json' });
     if (!val) continue;
     const tn = val.tournamentNavn;
     if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [] };
@@ -809,12 +785,17 @@ async function handleScheduled() {
 
     for (const m of info.mottakere) {
       const fornavn = m.navn ? m.navn.split(' ')[0] : '';
-      const ok = await sendResend(m.email, fornavn, tournamentNavn);
-      if (ok) await VARSLER.delete(m.key);
+      const ok = await sendResend(m.email, fornavn, tournamentNavn, env);
+      if (ok) await env.VARSLER.delete(m.key);
     }
   }
 }
 
-addEventListener('fetch', function(event) {
-  event.respondWith(handleRequest(event.request, typeof ANALYTICS !== 'undefined' ? { ANALYTICS: ANALYTICS } : {}));
-});
+export default {
+  async fetch(request, env, ctx) {
+    return handleRequest(request, env);
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleScheduled(env));
+  }
+};

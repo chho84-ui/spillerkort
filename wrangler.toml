@@ -4,3 +4,11 @@ compatibility_date = "2024-01-01"
 
 [triggers]
 crons = ["0 * * * *"]
+
+[[kv_namespaces]]
+binding = "VARSLER"
+id = "4b0e3b059e3e4b3dad63d24ddf7ef9fd"
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "goodminton_searches"
