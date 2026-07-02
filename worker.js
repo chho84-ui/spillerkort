@@ -1,7 +1,9 @@
+import { buildPushPayload } from '@block65/webcrypto-web-push';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 let cachedCtx = null;
@@ -722,7 +724,59 @@ async function handleRequest(request, env) {
     return json({ok: true});
   }
 
+  if (path === '/push/subscribe') {
+    let body;
+    try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
+    const { subscription, tournamentNavn, cup2000Url, navn, klubb } = body || {};
+
+    if (!subscription || typeof subscription.endpoint !== 'string') return json({error: 'Mangler abonnement'}, 400);
+    if (subscription.endpoint.length > 1024) return json({error: 'Endpoint for langt'}, 400);
+    let endpointUrl;
+    try { endpointUrl = new URL(subscription.endpoint); } catch(e) { return json({error: 'Ugyldig endpoint'}, 400); }
+    if (endpointUrl.protocol !== 'https:') return json({error: 'Ugyldig endpoint'}, 400);
+    if (!subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) return json({error: 'Mangler nøkler'}, 400);
+    if (!tournamentNavn) return json({error: 'Mangler felt'}, 400);
+
+    const endpointHash = await sha256Hex(subscription.endpoint);
+    const key = `push:${tournamentNavn}:${endpointHash.substring(0, 16)}`;
+    await env.VARSLER.put(key, JSON.stringify({
+      subscription, tournamentNavn, cup2000Url: cup2000Url || '', navn: navn || '', klubb: klubb || '', registrert: Date.now()
+    }), { expirationTtl: 60 * 60 * 24 * 30 });
+    return json({ok: true});
+  }
+
+  if (path === '/push/test') {
+    const authHeader = request.headers.get('Authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token || token !== env.STATS_TOKEN) return json({error: 'Unauthorized'}, 401);
+
+    let body;
+    try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
+    const { tournamentNavn } = body || {};
+    if (!tournamentNavn) return json({error: 'Mangler felt'}, 400);
+
+    const list = await env.VARSLER.list({ prefix: `push:${tournamentNavn}:` });
+    let sent = 0, failed = 0, deleted = 0;
+    for (const k of list.keys) {
+      const val = await env.VARSLER.get(k.name, { type: 'json' });
+      if (!val) continue;
+      const { ok, status } = await sendPush(val.subscription, { title: 'Goodminton', body: 'Test-varsel 🏸', url: 'https://goodminton.no' }, env);
+      if (ok) sent++;
+      else {
+        failed++;
+        if (status === 404 || status === 410) { await env.VARSLER.delete(k.name); deleted++; }
+      }
+    }
+    return json({ sent, failed, deleted });
+  }
+
   return new Response('Not found', { status: 404, headers: CORS });
+}
+
+async function sha256Hex(str) {
+  const data = new TextEncoder().encode(str);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function sendResend(email, fornavn, tournamentNavn, env) {
@@ -743,6 +797,25 @@ async function sendResend(email, fornavn, tournamentNavn, env) {
     })
   });
   return r.ok;
+}
+
+async function sendPush(subscription, payloadObj, env) {
+  const vapid = {
+    subject: env.VAPID_SUBJECT,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY
+  };
+  const message = {
+    data: payloadObj,
+    options: { ttl: 60 * 60 * 24 }
+  };
+  try {
+    const payload = await buildPushPayload(message, subscription, vapid);
+    const res = await fetch(subscription.endpoint, payload);
+    return { ok: res.ok, status: res.status };
+  } catch (e) {
+    return { ok: false, status: 0 };
+  }
 }
 
 async function cup2000HarKamper(tournamentNavn, cup2000Url) {
@@ -766,17 +839,28 @@ async function cup2000HarKamper(tournamentNavn, cup2000Url) {
 }
 
 async function handleScheduled(env) {
-  const list = await env.VARSLER.list({ prefix: 'varsle:' });
-  if (!list.keys.length) return;
+  const [varsleList, pushList] = await Promise.all([
+    env.VARSLER.list({ prefix: 'varsle:' }),
+    env.VARSLER.list({ prefix: 'push:' })
+  ]);
+  if (!varsleList.keys.length && !pushList.keys.length) return;
 
-  // Grupper per turnering for å unngå å sjekke cup2000 flere ganger
+  // Grupper begge varsel-typer per turnering, slik at cup2000HarKamper() kun kalles én gang per turnering
   const turneringer = {};
-  for (const key of list.keys) {
+  for (const key of varsleList.keys) {
     const val = await env.VARSLER.get(key.name, { type: 'json' });
     if (!val) continue;
     const tn = val.tournamentNavn;
-    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [] };
+    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [], pushAbonnenter: [] };
     turneringer[tn].mottakere.push({ key: key.name, email: val.email, navn: val.navn });
+  }
+  for (const key of pushList.keys) {
+    const val = await env.VARSLER.get(key.name, { type: 'json' });
+    if (!val) continue;
+    const tn = val.tournamentNavn;
+    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [], pushAbonnenter: [] };
+    if (!turneringer[tn].cup2000Url) turneringer[tn].cup2000Url = val.cup2000Url;
+    turneringer[tn].pushAbonnenter.push({ key: key.name, subscription: val.subscription });
   }
 
   for (const [tournamentNavn, info] of Object.entries(turneringer)) {
@@ -787,6 +871,12 @@ async function handleScheduled(env) {
       const fornavn = m.navn ? m.navn.split(' ')[0] : '';
       const ok = await sendResend(m.email, fornavn, tournamentNavn, env);
       if (ok) await env.VARSLER.delete(m.key);
+    }
+
+    const pushPayload = { title: 'Goodminton', body: `Kampprogrammet for ${tournamentNavn} er klart! 🏸`, url: 'https://goodminton.no' };
+    for (const p of info.pushAbonnenter) {
+      const { ok, status } = await sendPush(p.subscription, pushPayload, env);
+      if (ok || status === 404 || status === 410) await env.VARSLER.delete(p.key);
     }
   }
 }

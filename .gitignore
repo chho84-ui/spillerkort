@@ -1,2 +1,4 @@
 .wrangler/
 SETUP.md
+node_modules/
+dist/

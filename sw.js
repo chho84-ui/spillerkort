@@ -3,7 +3,7 @@
 // statiske filer caches — API-kall (worker-proxy, Firebase, cup2000) går
 // alltid rett på nett. Dermed forverres ikke cache-problemene på GitHub
 // Pages: nye deployer plukkes opp ved neste last med nett.
-var CACHE = 'goodminton-v1';
+var CACHE = 'goodminton-v2';
 var ASSETS = ['/', '/index.html', '/style.css', '/manifest.json', '/icon-192.png'];
 
 self.addEventListener('install', function(e) {
@@ -38,6 +38,34 @@ self.addEventListener('fetch', function(e) {
         if (e.request.mode === 'navigate') return caches.match('/index.html');
         return Response.error();
       });
+    })
+  );
+});
+
+self.addEventListener('push', function(e) {
+  var d;
+  try { d = e.data ? e.data.json() : {}; }
+  catch (err) { d = { title: 'Goodminton', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(
+    self.registration.showNotification(d.title || 'Goodminton', {
+      body: d.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: d.url || 'https://goodminton.no' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function(e) {
+  e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || 'https://goodminton.no';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var c = clientList[i];
+        if (c.url.indexOf('goodminton.no') !== -1 && 'focus' in c) return c.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });

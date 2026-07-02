@@ -1,0 +1,9 @@
+{
+  "name": "spillerkort-proxy",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Worker proxy for goodminton.no",
+  "dependencies": {
+    "@block65/webcrypto-web-push": "^1.0.2"
+  }
+}

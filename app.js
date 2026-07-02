@@ -204,6 +204,16 @@ function visFavoritter() {
 // ── End Firebase ──────────────────────────────────────────────────────────
 
 var PROXY = 'https://spillerkort-proxy.chho84.workers.dev';
+var VAPID_PUBLIC_KEY = 'BF3Tug5KZcXIB2kgpJDdgjx9lbL9R9L6SQHFvHbkktdmwxKWLldKyDP9OIu5pjM1Cpvl6jkMIMKJiTXS2t-PM2U';
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = window.atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for (var i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
 
 var SN, SI, SK, SS;
 var oliverRanking = [];
@@ -1120,14 +1130,84 @@ function parseKamper(html) {
   return kamper;
 }
 
+function aktiverPushVarsel(tournamentNavn, cup2000Url, statusEl) {
+  return Notification.requestPermission().then(function(perm) {
+    if (perm !== 'granted') {
+      statusEl.textContent = 'Varsler er blokkert i nettleseren';
+      return;
+    }
+    return navigator.serviceWorker.ready.then(function(reg) {
+      return reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }).then(function(sub) {
+      return fetch(PROXY + '/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscription: sub.toJSON(),
+          tournamentNavn: tournamentNavn,
+          cup2000Url: cup2000Url || '',
+          navn: SN || '',
+          klubb: SK || ''
+        })
+      }).then(function(r) {
+        return r.json().then(function(d) { return { ok: r.ok, d: d }; });
+      });
+    }).then(function(res) {
+      if (!res.ok || !res.d || !res.d.ok) throw new Error('push-feil');
+      statusEl.style.color = '#7fffd4';
+      statusEl.textContent = '✓ Du får push-varsel når programmet er klart!';
+    });
+  }).catch(function(err) {
+    console.error('Push-feil:', err);
+    if (err && err.name === 'NotAllowedError') {
+      statusEl.textContent = 'Varsler er blokkert i nettleseren';
+    } else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      statusEl.textContent = 'På iPhone: legg først appen til hjemskjermen (Del-knappen → Legg til på Hjem-skjerm)';
+    } else {
+      statusEl.textContent = 'Kunne ikke aktivere push-varsel.';
+    }
+  });
+}
+
 function visVarsleSkjema(tournamentNavn, cup2000Url, container) {
   // Bytt ut knappen med inline-skjema
   var lagretEpost = localStorage.getItem('sk_epost') || '';
+  var pushStottes = ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
   var form = document.createElement('div');
   form.className = 'sk-varsle-form';
-  form.innerHTML = '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Få e-post når kampprogram er tilgjengelig</div>'
+
+  if (pushStottes) {
+    var pushBtn = document.createElement('button');
+    pushBtn.className = 'sk-varsle-send';
+    pushBtn.textContent = '🔔 Push-varsel på denne enheten';
+    var pushStatus = document.createElement('div');
+    pushStatus.style.cssText = 'font-size:11px;color:#aaa;margin-top:6px;min-height:14px';
+    pushBtn.onclick = function() {
+      pushBtn.disabled = true;
+      pushStatus.style.color = '#aaa';
+      pushStatus.textContent = 'Aktiverer...';
+      aktiverPushVarsel(tournamentNavn, cup2000Url, pushStatus).finally(function() {
+        pushBtn.disabled = false;
+      });
+    };
+    form.appendChild(pushBtn);
+    form.appendChild(pushStatus);
+
+    var skille = document.createElement('div');
+    skille.style.cssText = 'text-align:center;font-size:11px;color:#555;margin:10px 0;text-transform:uppercase;letter-spacing:.05em';
+    skille.textContent = 'eller';
+    form.appendChild(skille);
+  }
+
+  var epostDiv = document.createElement('div');
+  epostDiv.innerHTML = '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Få e-post når kampprogram er tilgjengelig</div>'
     + '<input type="email" id="sk-varsle-epost" placeholder="din@epost.no" value="' + esc(lagretEpost) + '">'
     + '<button class="sk-varsle-send" onclick="sendVarsel(this,\'' + escAttrJs(tournamentNavn) + '\',\'' + escAttrJs(cup2000Url||'') + '\')">Send varsel</button>';
+  form.appendChild(epostDiv);
+
   // Fjern eksisterende varsle-knapper i denne containeren
   var existing = container.querySelectorAll('.sk-varsle-btn, .sk-varsle-mini, .sk-varsle-form');
   existing.forEach(function(el) { el.remove(); });
