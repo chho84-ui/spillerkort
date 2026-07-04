@@ -1529,7 +1529,7 @@ function hent() {
   var gen = ++_hentGen;
 
   var now0 = new Date();
-  var seasonStart = now0.getMonth() >= 7 ? now0.getFullYear() : now0.getFullYear() - 1;
+  var seasonStart = now0.getMonth() >= 6 ? now0.getFullYear() : now0.getFullYear() - 1;
   SS = '200' + seasonStart;
 
   var btn = document.getElementById('hent-btn');
