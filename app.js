@@ -541,7 +541,10 @@ function finnTurneringer() {
       var year = parseInt(parts[2]);
       // Finn siste dag fra 'dager' ("28-30" → 30, "28." → 28)
       var dager = kmap[tid].dager || '';
-      var dayM = dager.match(/(\d+)\.?\s*[-–]\s*(\d+)/);
+      // Badmintonportalen bruker U+2011 non-breaking hyphen i dagintervallet ("19.‑20."),
+      // ikke ASCII-bindestrek. Uten hele dash-spekteret her faller endDay tilbake til
+      // startdagen, og pågående turneringer blir feilaktig markert som ferdigspilt.
+      var dayM = dager.match(/(\d+)\.?\s*[-\u2010-\u2015\u2212]\s*(\d+)/);
       var endDay = dayM ? parseInt(dayM[2]) : parseInt(parts[0]);
       var endDate = new Date(year, month, endDay);
       kmap[tid].isPast = (endDate < today);
