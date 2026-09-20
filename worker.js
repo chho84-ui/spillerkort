@@ -635,11 +635,14 @@ async function handleRequest(request, env) {
     const BASE2 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA2 = { 'User-Agent': 'Mozilla/5.0' };
 
-    // w=1 gir "Næste kampe": alle kommende + pågående kamper med live score
-    const liveJson = await (await fetch(`${BASE2}?tournamentid=${cup2000Id}&w=1`, { headers: UA2 })).json();
-    // data[3][0] = flat liste av alle kamper
-    const rawKamper = Array.isArray(liveJson.data) && Array.isArray(liveJson.data[3]) && Array.isArray(liveJson.data[3][0])
-      ? liveJson.data[3][0] : [];
+    // To kilder: o=1 = "Kampe i gang" (pågående, har banenummer), w=1 = "Næste kampe" (kø, uten bane).
+    // En kamp som nettopp er satt i gang ligger i begge, så o=1 har forrang ved dedupe på kampnr.
+    const hentLive = async (q) => {
+      const r = await fetch(`${BASE2}?tournamentid=${cup2000Id}&${q}`, { headers: UA2 });
+      const j = await r.json();
+      return Array.isArray(j.data) && Array.isArray(j.data[3]) && Array.isArray(j.data[3][0]) ? j.data[3][0] : [];
+    };
+    const [raaIgang, raaKoe] = await Promise.all([hentLive('o=1'), hentLive('w=1')]);
 
     const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
     function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
@@ -647,9 +650,8 @@ async function handleRequest(request, env) {
 
     const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
 
-    const kamper2 = [];
-    for (const match of rawKamper) {
-      if (!Array.isArray(match)) continue;
+    // match[0] er kampnummer (ikke bane). Ekte bane står kun i match[3] for kamper i gang.
+    function parseKamp(match) {
       const sp1raw = Array.isArray(match[6]) ? match[6] : [];
       const sp2raw = Array.isArray(match[7]) ? match[7] : [];
       const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
@@ -659,30 +661,44 @@ async function handleRequest(request, env) {
         ? allNames.some(n => navnDeler.every(del => n.includes(del)))
         : allNames.some(n => n.includes(navnDeler[0] || ''));
       const discFull = decEnt2(String(match[4] || ''));
-      const dc = discCode2(discFull);
       const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
-      const ageGroup = ageGroupM ? ageGroupM[0].toUpperCase() : '';
-      // Tid: "HH:MM DD-MM-YYYY"
-      const rawTime = String(match[2] || '');
-      const tp = rawTime.trim().split(/\s+/);
+      // Tid: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
+      const tp = String(match[2] || '').trim().split(/\s+/);
       const tid = tp.length >= 2 && /^\d{2}:\d{2}/.test(tp[0]) ? tp[1].substring(0,5) + ' ' + tp[0].substring(0,5) : (tp[0] || '');
-      // Status: match[3] = "NÆSTE KAMP" / "Antal kampe før: N" / ""
-      const statusRaw = decEnt2(String(match[3] || '')).trim();
-      let status; // 'live' | 'next' | number (kamper igjen)
-      if (!statusRaw || statusRaw === 'NÆSTE KAMP') {
-        status = statusRaw === 'NÆSTE KAMP' ? 'next' : 'live';
-      } else {
-        const foerM = statusRaw.match(/(\d+)/);
-        status = foerM ? parseInt(foerM[1]) : statusRaw;
-      }
-      // Live score: match[10] = [set1sp1, set1sp2, set2sp1, set2sp2, ...]
-      const sets = Array.isArray(match[10]) ? match[10] : [];
-      const score = [];
-      for (let i = 0; i + 1 < sets.length; i += 2) {
-        if (sets[i] != null && sets[i+1] != null) score.push([sets[i], sets[i+1]]);
-      }
-      kamper2.push({ tid, bane: String(match[0] || ''), disc: dc, discFull, ageGroup, spiller1, spiller2, score, status, mine });
+      return {
+        kampnr: String(match[0] || ''),
+        tid,
+        disc: discCode2(discFull),
+        discFull,
+        ageGroup: ageGroupM ? ageGroupM[0].toUpperCase() : '',
+        spiller1, spiller2, mine
+      };
     }
+
+    const kamper2 = [];
+    const seddeKampnr = new Set();
+
+    for (const match of raaIgang) {
+      if (!Array.isArray(match)) continue;
+      const k = parseKamp(match);
+      // match[3] = "Startet bane 4 11:26"
+      const baneM = decEnt2(String(match[3] || '')).match(/bane\s+(\S+)\s+(\d{1,2}:\d{2})/i);
+      kamper2.push({ ...k, status: 'live', bane: baneM ? baneM[1] : '', startet: baneM ? baneM[2] : '' });
+      seddeKampnr.add(k.kampnr);
+    }
+
+    for (const match of raaKoe) {
+      if (!Array.isArray(match)) continue;
+      const k = parseKamp(match);
+      if (seddeKampnr.has(k.kampnr)) continue;
+      // match[3] = "NÆSTE KAMP" eller "Antal kampe før: N"
+      const statusRaw = decEnt2(String(match[3] || '')).trim();
+      const foerM = statusRaw.match(/(\d+)/);
+      const status = statusRaw.toUpperCase() === 'NÆSTE KAMP' ? 'next' : (foerM ? parseInt(foerM[1]) : 'next');
+      kamper2.push({ ...k, status, bane: '', startet: '' });
+      seddeKampnr.add(k.kampnr);
+    }
+
     return json({ kamper: kamper2 });
   }
 
