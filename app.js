@@ -1442,54 +1442,54 @@ function renderLiveInnhold(data) {
     return;
   }
 
-  // Grupper etter bane
-  var baneMap = {}, baneRekkefølge = [];
-  for (var i = 0; i < kamper.length; i++) {
-    var b = String(kamper[i].bane || '?');
-    if (!baneMap[b]) { baneMap[b] = []; baneRekkefølge.push(b); }
-    baneMap[b].push(kamper[i]);
+  // 'tid' er "DD-MM HH:MM" — vis klokkeslettet, ikke datoen.
+  function klokke(t) { var d = String(t || '').split(' '); return d.length > 1 ? d[1] : d[0]; }
+
+  function kampKort(k, hdr) {
+    var isLive = k.status === 'live';
+    var statusHtml;
+    if (isLive) statusHtml = '<span class="sk-live-status-live">● LIVE</span>';
+    else if (k.status === 'next') statusHtml = '<span class="sk-live-status-next">NESTE</span>';
+    else statusHtml = '<span class="sk-live-status-kø">' + esc(k.status) + ' før</span>';
+
+    var hoyre = isLive
+      ? (k.startet ? '<span class="sk-live-tid">fra ' + esc(k.startet) + '</span>' : '')
+      : '<span class="sk-live-tid">' + esc(klokke(k.tid)) + '</span>';
+
+    var sp1 = (k.spiller1 || []).map(function(s) { return esc(s.navn); }).join(' / ');
+    var sp2 = (k.spiller2 || []).map(function(s) { return esc(s.navn); }).join(' / ');
+
+    return (hdr || '')
+      + '<div class="sk-live-kamp' + (k.mine ? ' sk-live-kamp-mine' : '') + (isLive ? ' sk-live-kamp-live' : '') + '">'
+      + '<div class="sk-live-kamp-top">'
+      + '<span class="sk-live-disc">' + esc(k.disc || '') + ' ' + esc(k.ageGroup || '') + '</span>'
+      + statusHtml + hoyre
+      + '</div>'
+      + '<div class="sk-live-sp' + (k.mine ? ' sk-live-sp-mine' : '') + '">' + sp1 + '</div>'
+      + '<div class="sk-live-vs">vs</div>'
+      + '<div class="sk-live-sp">' + sp2 + '</div>'
+      + '</div>';
   }
 
+  var igang = kamper.filter(function(k) { return k.status === 'live'; })
+    .sort(function(a, b) { return (parseInt(a.bane) || 0) - (parseInt(b.bane) || 0); });
+  var koe = kamper.filter(function(k) { return k.status !== 'live'; })
+    .sort(function(a, b) {
+      var av = a.status === 'next' ? -1 : a.status, bv = b.status === 'next' ? -1 : b.status;
+      return av - bv;
+    });
+
   var html = '';
-  for (var bi = 0; bi < baneRekkefølge.length; bi++) {
-    var bane = baneRekkefølge[bi];
-    var baneKamper = baneMap[bane];
-    html += '<div class="sk-live-bane"><div class="sk-live-bane-hdr">Bane ' + esc(bane) + '</div>';
-
-    for (var ki = 0; ki < baneKamper.length; ki++) {
-      var k = baneKamper[ki];
-      var isLive = k.status === 'live';
-      var isNext = k.status === 'next';
-      var foerAntall = typeof k.status === 'number' ? k.status : null;
-
-      var statusHtml = '';
-      if (isLive) statusHtml = '<span class="sk-live-status-live">● LIVE</span>';
-      else if (isNext) statusHtml = '<span class="sk-live-status-next">NESTE</span>';
-      else if (foerAntall !== null) statusHtml = '<span class="sk-live-status-kø">' + foerAntall + ' før</span>';
-
-      var scoreHtml = '';
-      if (k.score && k.score.length) {
-        scoreHtml = '<div class="sk-live-score">'
-          + k.score.map(function(s) { return '<span>' + s[0] + '<em>–</em>' + s[1] + '</span>'; }).join(' ')
-          + '</div>';
-      }
-
-      var sp1 = (k.spiller1 || []).map(function(s) { return esc(s.navn); }).join(' / ');
-      var sp2 = (k.spiller2 || []).map(function(s) { return esc(s.navn); }).join(' / ');
-
-      html += '<div class="sk-live-kamp' + (k.mine ? ' sk-live-kamp-mine' : '') + (isLive ? ' sk-live-kamp-live' : '') + '">'
-        + '<div class="sk-live-kamp-top">'
-        + '<span class="sk-live-disc">' + esc(k.disc || '') + ' ' + esc(k.ageGroup || '') + '</span>'
-        + statusHtml
-        + '<span class="sk-live-tid">' + esc(k.tid ? k.tid.substring(0,5) : '') + '</span>'
-        + '</div>'
-        + '<div class="sk-live-sp' + (k.mine ? ' sk-live-sp-mine' : '') + '">' + sp1 + '</div>'
-        + '<div class="sk-live-vs">vs</div>'
-        + '<div class="sk-live-sp">' + sp2 + '</div>'
-        + scoreHtml
-        + '</div>';
+  if (igang.length) {
+    html += '<div class="sk-live-seksjon">Kamper i gang</div>';
+    for (var i = 0; i < igang.length; i++) {
+      var k = igang[i];
+      html += kampKort(k, '<div class="sk-live-bane-hdr">' + (k.bane ? 'Bane ' + esc(k.bane) : 'På bane') + '</div>');
     }
-    html += '</div>';
+  }
+  if (koe.length) {
+    html += '<div class="sk-live-seksjon">Neste kamper</div>';
+    for (var j = 0; j < koe.length; j++) html += kampKort(koe[j], '');
   }
   innhold.innerHTML = html;
 }
