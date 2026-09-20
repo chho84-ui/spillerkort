@@ -91,13 +91,19 @@ Spiller i pulje: `s = [idx, ["Navn, Klubb", ...]]`
   - Kamper i `runde[1][0]` (ikke `runde[1]`)
   - Kamp-format: `[bane, ?, "HH:MM DD-MM-YYYY", scoreStr, ?, vinner, [], [], sp1idx, sp2idx, ...]`
 
-### Kommende/live kamper:
-`?tournamentid=ID&w=1`
-- `data[3][0]` = flat liste av kamper
-- Kamp: `[bane, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [sp2names...], sp1idx, sp2idx, score, ...]`
-  - `match[3]` = `"NÆSTE KAMP"` / `"Antal kampe før: N"` / `""` (live)
-  - `match[6]`/`[7]` = navn-arrays: `["Navn, Klubb", ...]`
-  - `match[10]` = live score: `[set1sp1, set1sp2, set2sp1, set2sp2, ...]`
+### Kommende og pågående kamper:
+To separate endepunkt – `/cup2000live` henter begge parallelt og dedupliserer på kampnummer:
+- `?tournamentid=ID&w=1` → **"Næste kampe"** (køen). Status er *alltid* `"NÆSTE KAMP"` eller
+  `"Antal kampe før: N"` – aldri tom. Pågående kamper ligger **ikke** her.
+- `?tournamentid=ID&o=1` → **"Kampe i gang"** (renderMethod=8). Kun kamper som er satt i gang.
+
+Begge: `data[3][0]` = flat liste av kamper.
+Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [sp2names...], sp1idx, sp2idx, ...]`
+- `match[0]` = **kampnummer, ikke bane**
+- `match[3]` = køstatus (w=1) eller `"Startet bane 4 11:26"` (o=1) – eneste sted ekte bane finnes
+- `match[6]`/`[7]` = navn-arrays: `["Navn, Klubb", ...]`
+- `match[10]` = **ikke stilling.** Kø-metadata som teller oppover (`[0,4,0,1]`, `[0,4,0,2]`, …).
+  Cup2000 publiserer ingen løpende poengstilling – ferdige resultater finnes kun i puljedata.
 
 ---
 
