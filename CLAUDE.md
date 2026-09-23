@@ -12,6 +12,9 @@ Webapp som viser spillerkort, ranking og kampprogram for badmintonspillere i Nor
 ## Deploy-rutine (ALLTID gjøre begge)
 
 ### Worker (worker.js → Cloudflare):
+Deployes automatisk av GitHub Actions (`.github/workflows/deploy-worker.yml`) ved push til `main`
+som endrer `worker.js`/`wrangler.toml`/`package*.json`. Kan også startes manuelt (workflow_dispatch).
+Krever repo-secret `CLOUDFLARE_API_TOKEN`. Manuelt alternativ:
 ```bash
 # Tokens ligger i SETUP.md (ikke committed) eller miljøvariabler
 CLOUDFLARE_API_TOKEN=<se SETUP.md> \
