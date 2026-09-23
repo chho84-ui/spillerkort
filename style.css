@@ -75,7 +75,7 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-gruppe-tabell tr.meg td { background: rgba(83,216,251,.08); color: #53d8fb; font-weight: bold; }
 .sk-gruppe-tabell .pos { color: #555; width: 20px; }
 .sk-gruppe-tabell .score { color: #7fffd4; text-align: right; white-space: nowrap; }
-.sk-live-refresh-btn { background: none; border: 1px solid #1a3a6a; color: #53d8fb; border-radius: 8px; padding: 0; min-width: 42px; min-height: 42px; font-size: 17px; cursor: pointer; margin-right: 4px; }
+.sk-live-refresh-btn { background: none; border: 1px solid #1a3a6a; color: #53d8fb; border-radius: 8px; padding: 0; min-width: 42px; min-height: 42px; font-size: 17px; cursor: pointer; margin-right: 4px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .sk-live-refresh-btn:disabled { opacity: .4; }
 .sk-live-btn { background: #0f3460; border: 1px solid #1a4a8a; color: #53d8fb; border-radius: 6px; padding: 9px 14px; font-size: 12px; cursor: pointer; white-space: nowrap; margin-left: 6px; flex-shrink: 0; }
 .sk-live-btn:active { background: #1a4a8a; }
