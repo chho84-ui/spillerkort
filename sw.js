@@ -3,8 +3,8 @@
 // statiske filer caches — API-kall (worker-proxy, Firebase, cup2000) går
 // alltid rett på nett. Dermed forverres ikke cache-problemene på GitHub
 // Pages: nye deployer plukkes opp ved neste last med nett.
-var CACHE = 'goodminton-v2';
-var ASSETS = ['/', '/index.html', '/style.css', '/manifest.json', '/icon-192.png'];
+var CACHE = 'goodminton-v3';
+var ASSETS = ['/', '/index.html', '/style.css', '/manifest.json', '/icon-192.png', '/logo.png'];
 
 self.addEventListener('install', function(e) {
   e.waitUntil(
