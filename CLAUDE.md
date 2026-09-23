@@ -54,7 +54,7 @@ git push
 | `/api` | Proxy til badmintonportalen AJAX-webservice |
 | `/app` | Proxy til badmintonportalen App.aspx |
 | `/cup2000` | Henter kampprogram + gruppestandings + sluttspill fra cup2000.dk |
-| `/cup2000live` | Henter alle kommende/pågående kamper (alle baner) fra cup2000.dk |
+| `/cup2000live` | Henter alle kommende/pågående kamper (alle baner) + siste resultater fra cup2000.dk |
 | `/varsle` | Lagrer e-postvarsel i KV-store (VARSLER) |
 | `/debug` | Sjekker badmintonportalen session-token |
 
@@ -103,7 +103,14 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 - `match[3]` = køstatus (w=1) eller `"Startet bane 4 11:26"` (o=1) – eneste sted ekte bane finnes
 - `match[6]`/`[7]` = navn-arrays: `["Navn, Klubb", ...]`
 - `match[10]` = **ikke stilling.** Kø-metadata som teller oppover (`[0,4,0,1]`, `[0,4,0,2]`, …).
-  Cup2000 publiserer ingen løpende poengstilling – ferdige resultater finnes kun i puljedata.
+  Cup2000 publiserer ingen løpende poengstilling.
+
+### Siste resultater:
+`?tournamentid=ID&lr=1` → **"Seneste resultater"** (renderMethod=12), nyeste først. Hentes også av `/cup2000live` (felt `resultater`).
+`data[3][0]` = samme kampformat som over, men med ferdig resultat:
+- `match[3]` = score `"12/15 8/15"` (sp1/sp2 per sett)
+- `match[4]` = full klassetekst, f.eks. `"Mixed double U17 A Puljevinner finale"`
+- `match[5]` = vinner: 1=sp1, 2=sp2
 
 ---
 
@@ -115,7 +122,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `visTurnering(t)` | Renderer én turnering med kamper og gruppe-knapp |
 | `cup2000Api(navn, url)` | Henter kampprogram fra `/cup2000` (2 min cache) |
 | `cup2000LiveApi(navn)` | Henter live-oversikt fra `/cup2000live` (30 sek cache) |
-| `visLive(id, navn)` | Åpner live-panel overlay |
+| `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |
 | `visGruppe(g)` | Åpner gruppestillings-overlay |
