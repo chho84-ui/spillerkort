@@ -148,8 +148,22 @@ async function handleRequest(request, env) {
   if (path === '/api') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
-    const TILLATTE_METODER = ['SearchPlayer', 'GetPlayerProfile', 'GetSeasonPlan', 'SearchRegistrationsByClass', 'SearchTournamentResults'];
+    const TILLATTE_METODER = ['SearchPlayer', 'GetPlayerProfile', 'GetSeasonPlan', 'SearchRegistrationsByClass', 'SearchTournamentResults', 'SearchTournamentMatches'];
     if (!TILLATTE_METODER.includes(body.method)) return json({error: 'Metode ikke tillatt'}, 403);
+
+    // Resultater og tidligere sesongers profiler endrer seg sjelden; nåværende sesongs
+    // profil caches ikke, ellers blir rankingen utdatert.
+    const naa = new Date();
+    const gjeldendeSesong = 2000000 + (naa.getMonth() >= 6 ? naa.getFullYear() : naa.getFullYear() - 1);
+    let ttl = 0;
+    if (body.method === 'SearchTournamentMatches' || body.method === 'SearchTournamentResults') ttl = 6 * 3600;
+    if (body.method === 'GetPlayerProfile' && Number(body.data && body.data.seasonid) < gjeldendeSesong) ttl = 7 * 86400;
+    const cacheKey = ttl ? new Request('https://cache.goodminton.no/api/' + body.method + '?' + encodeURIComponent(JSON.stringify(body.data))) : null;
+    if (cacheKey) {
+      const hit = await caches.default.match(cacheKey);
+      if (hit) return json(await hit.json());
+    }
+
     const ctx = await getCtx();
     if (!ctx) return json({error: 'Kunne ikke hente session fra badmintonportalen.no'}, 500);
     body.data.callbackcontextkey = ctx;
@@ -159,6 +173,11 @@ async function handleRequest(request, env) {
       body: JSON.stringify(body.data)
     });
     const result = await r.json();
+    if (cacheKey && r.ok) {
+      await caches.default.put(cacheKey, new Response(JSON.stringify(result), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=' + ttl }
+      }));
+    }
     return json(result);
   }
 

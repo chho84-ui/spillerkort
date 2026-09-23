@@ -746,13 +746,15 @@ function hentMotstanderRanking(navn, disc, ageGroup, klubb) {
       var fodtM = html2.match(/dt<\/h2>\s*(\d{4})/i);
       var fodt = fodtM ? fodtM[1] : null;
 
-      if (!allMatches.length) return fodt ? { plass: null, rankingliste: '', fodt: fodt } : null;
+      var pid = pidM[1];
+      if (!allMatches.length) return { plass: null, rankingliste: '', fodt: fodt, pid: pid };
       if (ageGroupNorm) {
         var ageMatch = allMatches.find(function(m) { return m.rankingliste.toUpperCase().indexOf(ageGroupNorm) === 0; });
-        if (ageMatch) { ageMatch.fodt = fodt; return ageMatch; }
+        if (ageMatch) { ageMatch.fodt = fodt; ageMatch.pid = pid; return ageMatch; }
       }
       // Fallback: første treff
       allMatches[0].fodt = fodt;
+      allMatches[0].pid = pid;
       return allMatches[0];
     });
   }).then(function(r) { return cacheSet(key, r); }).catch(function() { return cacheSet(key, null); });
@@ -888,7 +890,7 @@ function visTurnering(t) {
         regAgeGroup = oliverRow ? (oliverRow.disiplin.match(/^(U\d+|Senior|Junior)/i) || ['',''])[1].toUpperCase() : '';
       }
       hentMotstanderRanking(reg.makkere[0].navn, kode, regAgeGroup).then(function(ranking) {
-        if (!ranking) return;
+        if (!ranking || !ranking.plass) return;
         var el = document.getElementById('sk-mkr-' + t.tournamentId + '-' + idx);
         if (el) el.textContent = '#' + ranking.plass;
       });
@@ -1147,6 +1149,15 @@ function visTurnering(t) {
                     var subSpan2 = motEl.querySelector('.sk-kamp-mot-sub');
                     if (ranking.plass) { var chip = document.createElement('span'); chip.className = 'sk-rank-mini'; chip.style.marginLeft = '3px'; chip.textContent = '#' + ranking.plass; motEl.insertBefore(chip, subSpan2); }
                     if (bornChip) motEl.insertBefore(bornChip, subSpan2);
+                }
+                if (ranking.pid && String(ranking.pid) !== String(SI)) {
+                  var h2hChip = document.createElement('span');
+                  h2hChip.className = 'sk-h2h-mini';
+                  h2hChip.textContent = 'H2H';
+                  h2hChip.title = 'Tidligere kamper mot ' + sNavn;
+                  h2hChip.onclick = function(e) { e.stopPropagation(); visH2H(ranking.pid, sNavn); };
+                  if (spillere.length > 1) motEl.appendChild(h2hChip);
+                  else motEl.insertBefore(h2hChip, motEl.querySelector('.sk-kamp-mot-sub'));
                 }
               });
             })(spiller.navn, spiller.klubb, si);
@@ -1544,6 +1555,204 @@ function oppdaterLive(tournamentNavn) {
 
 function lukkLive() {
   var el = document.getElementById('sk-live-overlay');
+  if (el) el.remove();
+}
+
+// ── Head-to-head ─────────────────────────────────────────────────────────
+// Kjører oppgaver (funksjoner som returnerer Promise) med maks n samtidig.
+function h2hPool(oppgaver, n) {
+  var res = new Array(oppgaver.length), i = 0;
+  function neste() {
+    if (i >= oppgaver.length) return Promise.resolve();
+    var idx = i++;
+    return oppgaver[idx]().then(function(r) { res[idx] = r; }, function() { res[idx] = null; }).then(neste);
+  }
+  var arbeidere = [];
+  for (var w = 0; w < Math.min(n, oppgaver.length); w++) arbeidere.push(neste());
+  return Promise.all(arbeidere).then(function() { return res; });
+}
+
+function apiHtml(method, data) {
+  var key = 'bp:' + method + ':' + JSON.stringify(data);
+  var hit = cacheGet(key);
+  if (hit !== undefined) return Promise.resolve(hit);
+  return api(method, data).then(function(res) {
+    return cacheSet(key, String((res.d && (res.d.Html || res.d.html)) || ''));
+  });
+}
+
+// Profilens "Turneringer"-tabell: klasse-ID → { dato, turnering, klasse }
+function h2hProfil(pid, seasonid) {
+  return apiHtml('GetPlayerProfile', { seasonid: seasonid, playerid: pid, getplayerdata: true, showUserProfile: true, showheader: false })
+    .then(function(html) {
+      var fodtM = html.match(/dt<\/h2>\s*(\d{4})/i);
+      var klasser = {};
+      var i = html.indexOf('<h2>Turneringer</h2>');
+      if (i !== -1) {
+        var doc = new DOMParser().parseFromString(html.slice(i), 'text/html');
+        doc.querySelectorAll('tr').forEach(function(tr) {
+          var tds = tr.querySelectorAll('td');
+          if (tds.length < 4) return;
+          tds[3].querySelectorAll('a').forEach(function(a) {
+            var m = (a.getAttribute('href') || '').match(/VisResultater\/#(\d+)/);
+            if (m) klasser[m[1]] = { dato: tds[0].textContent.trim(), turnering: tds[2].textContent.trim(), klasse: a.textContent.trim() };
+          });
+        });
+      }
+      return { fodt: fodtM ? parseInt(fodtM[1]) : null, klasser: klasser };
+    });
+}
+
+// Grener i klassen der begge spillerne står på resultatlisten: [{ eid, gren }]
+function h2hGrener(cid, idA, idB) {
+  return apiHtml('SearchTournamentResults', { tournamentclassid: parseInt(cid), clientselectfunction: 'SelectTournamentClass1' })
+    .then(function(html) {
+      var grener = [];
+      html.split('<h2>').slice(1).forEach(function(del) {
+        var em = del.match(/SelectEvent\('\d+',\s*'(\d+)'\)/);
+        if (em && del.indexOf('VisSpiller/#' + idA + "'") !== -1 && del.indexOf('VisSpiller/#' + idB + "'") !== -1) {
+          grener.push({ eid: em[1], gren: del.slice(0, del.indexOf('</h2>')).trim() });
+        }
+      });
+      return grener;
+    });
+}
+
+// Kamper i en gren der A og B står på hver sin side av nettet.
+function h2hKamper(cid, eid, idA, idB) {
+  return apiHtml('SearchTournamentMatches', { tournamentclassid: String(cid), tournamenteventid: String(eid), clientselectfunction: 'SelectTournamentClass1' })
+    .then(function(html) {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var runde = '', ut = [];
+      doc.querySelectorAll('table.matchlist tr').forEach(function(tr) {
+        if (tr.classList.contains('headrow')) { runde = tr.textContent.trim(); return; }
+        var tds = tr.querySelectorAll('td.player');
+        if (tds.length !== 2) return;
+        var sider = [0, 1].map(function(si) {
+          var spillere = [];
+          tds[si].querySelectorAll('a').forEach(function(a) {
+            var m = (a.getAttribute('href') || '').match(/VisSpiller\/#(\d+)/);
+            spillere.push({ id: m ? m[1] : '', navn: a.textContent.trim() });
+          });
+          return { spillere: spillere, vinner: tds[si].classList.contains('winner') };
+        });
+        function har(side, id) { return sider[side].spillere.some(function(p) { return p.id === id; }); }
+        var a = har(0, idA) && har(1, idB) ? 0 : har(1, idA) && har(0, idB) ? 1 : -1;
+        if (a < 0) return;
+        var resEl = tr.querySelector('td.result');
+        var score = resEl ? resEl.textContent.trim() : '';
+        var wo = /w\.?\s*o/i.test(score);
+        var sett = wo ? [] : score.split(',').map(function(s) {
+          var p = s.trim().split('/');
+          return p.length === 2 ? (a === 0 ? p[0] + '-' + p[1] : p[1] + '-' + p[0]) : s.trim();
+        }).filter(Boolean);
+        ut.push({ runde: runde, meg: sider[a].spillere, mot: sider[1 - a].spillere, vant: sider[a].vinner, wo: wo, sett: sett });
+      });
+      return ut;
+    });
+}
+
+function hentH2H(idA, idB) {
+  idA = String(idA); idB = String(idB);
+  var naa = parseInt(String(SS).slice(3));
+  return Promise.all([h2hProfil(idA, SS), h2hProfil(idB, SS)]).then(function(p) {
+    // Ingen vits å lete i sesonger før den yngste var gammel nok til å spille.
+    var fodt = Math.max(p[0].fodt || 0, p[1].fodt || 0);
+    var fra = Math.max(2013, fodt ? fodt + 6 : 2013);
+    var sesonger = [];
+    for (var y = naa - 1; y >= fra; y--) sesonger.push('200' + y);
+    var oppg = [];
+    sesonger.forEach(function(s) {
+      oppg.push(function() { return h2hProfil(idA, s); });
+      oppg.push(function() { return h2hProfil(idB, s); });
+    });
+    return h2hPool(oppg, 4).then(function(r) {
+      var par = [[p[0], p[1]]];
+      for (var i = 0; i < r.length; i += 2) par.push([r[i], r[i + 1]]);
+      var felles = [];
+      par.forEach(function(pp) {
+        if (!pp[0] || !pp[1]) return;
+        Object.keys(pp[0].klasser).forEach(function(cid) {
+          if (pp[1].klasser[cid]) felles.push(Object.assign({ cid: cid }, pp[0].klasser[cid]));
+        });
+      });
+      return h2hPool(felles.map(function(k) {
+        return function() {
+          return h2hGrener(k.cid, idA, idB).then(function(grener) {
+            return Promise.all(grener.map(function(g) {
+              return h2hKamper(k.cid, g.eid, idA, idB).then(function(ks) {
+                return ks.map(function(x) {
+                  x.gren = g.gren; x.dato = k.dato; x.turnering = k.turnering; x.klasse = k.klasse;
+                  return x;
+                });
+              });
+            }));
+          });
+        };
+      }), 4).then(function(res) {
+        var alle = [];
+        res.forEach(function(perKlasse) { (perKlasse || []).forEach(function(ks) { (ks || []).forEach(function(k) { alle.push(k); }); }); });
+        function dkey(d) { var s = String(d || '').split('.'); return (s[2] || '') + (s[1] || '') + (s[0] || ''); }
+        alle.sort(function(x, y) { return dkey(y.dato).localeCompare(dkey(x.dato)); });
+        return { kamper: alle, fraSesong: fra, tilSesong: naa };
+      });
+    });
+  });
+}
+
+function visH2H(motId, motNavn) {
+  lukkH2H();
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-h2h-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkH2H(); };
+  overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">H2H: ' + esc(SN) + ' – ' + esc(motNavn) + '</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkH2H()">✕</button>'
+    + '</div>'
+    + '<div id="sk-h2h-innhold" style="font-size:12px;color:#888;text-align:center;padding:20px">Henter historikk…</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  hentH2H(SI, motId).then(function(data) {
+    var innhold = document.getElementById('sk-h2h-innhold');
+    if (!innhold) return;
+    innhold.innerHTML = renderH2H(data, motNavn);
+  }).catch(function() {
+    var innhold = document.getElementById('sk-h2h-innhold');
+    if (innhold) innhold.innerHTML = '<div style="color:#e94560;font-size:12px;text-align:center;padding:16px">Kunne ikke hente historikk</div>';
+  });
+}
+
+function renderH2H(data, motNavn) {
+  if (!data.kamper.length) {
+    var periode = data.fraSesong + '/' + String(data.fraSesong + 1).slice(2) + ' – ' + data.tilSesong + '/' + String(data.tilSesong + 1).slice(2);
+    return '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen tidligere kamper mot ' + esc(motNavn)
+      + '<br><span style="font-size:10px">Sjekket sesongene ' + esc(periode) + '</span></div>';
+  }
+  var seire = 0, tap = 0;
+  data.kamper.forEach(function(k) { if (k.wo) return; if (k.vant) seire++; else tap++; });
+  function navn(sp) { return sp.map(function(s) { return esc(s.navn); }).join(' / '); }
+  var html = '<div class="sk-h2h-sum"><span class="sk-h2h-tall">' + seire + ' – ' + tap + '</span>'
+    + '<span class="sk-h2h-sub">' + esc(SN) + ' mot ' + esc(motNavn) + '</span></div>';
+  data.kamper.forEach(function(k) {
+    html += '<div class="sk-live-kamp">'
+      + '<div class="sk-live-kamp-top">'
+      + '<span class="sk-live-disc">' + esc(k.gren) + ' ' + esc(k.klasse) + ' · ' + esc(k.runde) + '</span>'
+      + '<span class="sk-live-tid">' + esc(k.dato) + '</span>'
+      + '</div>'
+      + '<div class="sk-live-disc" style="margin-bottom:3px">' + esc(k.turnering) + '</div>'
+      + '<div class="sk-live-sp' + (k.vant ? ' sk-res-vinner' : '') + '">' + navn(k.meg) + '</div>'
+      + '<div class="sk-live-sp' + (!k.vant ? ' sk-res-vinner' : '') + '">' + navn(k.mot) + '</div>'
+      + '<div class="sk-res-sett">' + (k.wo ? 'W.O.' : esc(k.sett.join(', '))) + '</div>'
+      + '</div>';
+  });
+  return html;
+}
+
+function lukkH2H() {
+  var el = document.getElementById('sk-h2h-overlay');
   if (el) el.remove();
 }
 
