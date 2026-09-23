@@ -834,7 +834,9 @@ function visTurnering(t) {
   var _mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
   var _dp = (t.dato || '').split('.');
   var _turDato = t.dager ? t.dager.replace(/\.\s*$/, '') + '. ' + (_dp[1] ? _mnd[parseInt(_dp[1])-1] : '') + (_dp[2] ? ' ' + _dp[2] : '') : (t.dato || '');
-  var liveKnappHtml = (t.isPast || !t.harStartet) ? '' : ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + escAttrJs(t.navn||'') + '\',\'' + escAttrJs(t.cup2000Url||'') + '\')">📋 Live</button>';
+  var liveKnappHtml = (t.isPast || !t.harStartet) ? '' :
+    ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + escAttrJs(t.navn||'') + '\',\'live\')">📋 Live</button>'
+    + '<button class="sk-live-btn" onclick="visLive(\'' + escAttrJs(t.navn||'') + '\',\'resultater\')">🏆 Resultater</button>';
   sec.innerHTML = '<div class="sk-sek-banner"><h3>' + esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
   res.appendChild(sec);
   var div = document.createElement('div');
@@ -1414,18 +1416,18 @@ function cup2000LiveApi(tournamentNavn) {
   }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
 }
 
-function visLive(tournamentId, tournamentNavn, cup2000Url) {
+var _liveModus = 'live';
+
+function visLive(tournamentNavn, modus) {
+  _liveModus = modus === 'resultater' ? 'resultater' : 'live';
   var overlay = document.createElement('div');
   overlay.className = 'sk-gruppe-overlay';
   overlay.id = 'sk-live-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) lukkLive(); };
 
-  var resultaterBtn = cup2000Url ? '<a class="sk-live-refresh-btn" href="' + cup2000Url + '&lr=1" target="_blank" title="Siste resultater">🏆</a>' : '';
-
   overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
     + '<div class="sk-gruppe-hdr">'
-    + '<span class="sk-gruppe-tittel">📋 Kamper nå</span>'
-    + resultaterBtn
+    + '<span class="sk-gruppe-tittel">' + (_liveModus === 'resultater' ? '🏆 Siste resultater' : '📋 Kamper nå') + '</span>'
     + '<button class="sk-live-refresh-btn" id="sk-live-refresh" onclick="oppdaterLive(\'' + escAttrJs(tournamentNavn) + '\')">↻</button>'
     + '<button class="sk-gruppe-xbtn" onclick="lukkLive()">✕</button>'
     + '</div>'
@@ -1439,9 +1441,34 @@ function visLive(tournamentId, tournamentNavn, cup2000Url) {
   });
 }
 
+function renderResultater(innhold, data) {
+  var res = data && data.resultater ? data.resultater : [];
+  if (!res.length) {
+    innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen resultater ennå</div>';
+    return;
+  }
+  function navn(sp) { return (sp || []).map(function(s) { return esc(s.navn); }).join(' / '); }
+  var html = '';
+  for (var i = 0; i < res.length; i++) {
+    var k = res[i];
+    var tid = String(k.tid || '').split(' ');
+    html += '<div class="sk-live-kamp' + (k.mine ? ' sk-live-kamp-mine' : '') + '">'
+      + '<div class="sk-live-kamp-top">'
+      + '<span class="sk-live-disc">' + esc(k.discFull || ((k.disc || '') + ' ' + (k.ageGroup || ''))) + '</span>'
+      + '<span class="sk-live-tid">' + esc(tid.length > 1 ? tid[1] : tid[0]) + '</span>'
+      + '</div>'
+      + '<div class="sk-live-sp' + (k.vinner === 1 ? ' sk-res-vinner' : '') + '">' + navn(k.spiller1) + '</div>'
+      + '<div class="sk-live-sp' + (k.vinner === 2 ? ' sk-res-vinner' : '') + '">' + navn(k.spiller2) + '</div>'
+      + '<div class="sk-res-sett">' + esc((k.sett || []).join(', ')) + '</div>'
+      + '</div>';
+  }
+  innhold.innerHTML = html;
+}
+
 function renderLiveInnhold(data) {
   var innhold = document.getElementById('sk-live-innhold');
   if (!innhold) return;
+  if (_liveModus === 'resultater') { renderResultater(innhold, data); return; }
   var kamper = data && data.kamper ? data.kamper : [];
   if (!kamper.length) {
     innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen kamper tilgjengelig</div>';

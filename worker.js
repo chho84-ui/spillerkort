@@ -642,7 +642,8 @@ async function handleRequest(request, env) {
       const j = await r.json();
       return Array.isArray(j.data) && Array.isArray(j.data[3]) && Array.isArray(j.data[3][0]) ? j.data[3][0] : [];
     };
-    const [raaIgang, raaKoe] = await Promise.all([hentLive('o=1'), hentLive('w=1')]);
+    // lr=1 = "Seneste resultater", nyeste først.
+    const [raaIgang, raaKoe, raaSiste] = await Promise.all([hentLive('o=1'), hentLive('w=1'), hentLive('lr=1').catch(() => [])]);
 
     const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
     function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
@@ -699,7 +700,18 @@ async function handleRequest(request, env) {
       seddeKampnr.add(k.kampnr);
     }
 
-    return json({ kamper: kamper2 });
+    // match[3] = score "12/15 8/15" (sp1/sp2 per sett), match[5] = vinner (1/2)
+    const resultater = [];
+    for (const match of raaSiste) {
+      if (!Array.isArray(match)) continue;
+      const k = parseKamp(match);
+      const sett = String(match[3] || '').trim().split(/\s+/).filter(Boolean).map(s => s.replace('/', '-'));
+      const vinner = match[5] === 1 || match[5] === 2 ? match[5] : 0;
+      resultater.push({ ...k, sett, vinner });
+      if (resultater.length >= 40) break;
+    }
+
+    return json({ kamper: kamper2, resultater });
   }
 
   if (path === '/stats') {
