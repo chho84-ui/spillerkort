@@ -1,7 +1,7 @@
 {
-  "name": "Goodminton – Spillerkort",
+  "name": "Goodminton",
   "short_name": "Goodminton",
-  "description": "Spillerkort, ranking og kampprogram for badmintonspillere i Norge",
+  "description": "Ranking, kamper og resultater for badmintonspillere i Norge",
   "lang": "nb",
   "start_url": "/",
   "display": "standalone",
