@@ -98,6 +98,10 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-live-vs { font-size: 10px; color: #444; padding: 1px 0; }
 .sk-res-vinner { font-weight: bold; color: #fff; }
 .sk-res-vinner::after { content: ' ✓'; color: #4caf50; }
+.sk-h2h-mini { font-size: 9px; font-weight: bold; background: #0f3460; color: #53d8fb; padding: 2px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; cursor: pointer; border: 1px solid #1a4a8a; }
+.sk-h2h-sum { text-align: center; padding: 6px 0 12px; margin-bottom: 8px; border-bottom: 1px solid #1a3a6a; }
+.sk-h2h-tall { display: block; font-size: 28px; font-weight: 900; color: #e94560; letter-spacing: 1px; }
+.sk-h2h-sub { font-size: 11px; color: #888; }
 .sk-res-sett { font-size: 11px; color: #53d8fb; margin-top: 3px; font-variant-numeric: tabular-nums; }
 #topbar { background: #16213e; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); border-bottom: 2px solid #0f3460; display: flex; align-items: center; gap: 10px; }
 #topbar-main { flex: 1; }

@@ -117,6 +117,20 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 
 ---
 
+## badmintonportalen – historiske resultater (via `/api`)
+
+- `GetPlayerProfile` med `getplayerdata: true` → seksjonen `<h2>Turneringer</h2>` lister spillerens klasser per sesong:
+  `<a href='/NBF/Turnering/VisResultater/#KLASSEID,'>U15 A</a>`. Sesong-ID-er tilbake til `2002013` (2013/14).
+- `SearchTournamentResults { tournamentclassid }` → sluttplassering per gren (`<h2>Herredouble</h2>`), med lenken
+  `TournamentResults.SelectEvent('KLASSEID','GRENID')` («Vis alle kamper»).
+- `SearchTournamentMatches { tournamentclassid, tournamenteventid, clientselectfunction }` → `table.matchlist`:
+  `tr.headrow` = runde, `td.player` ×2 (lenker `VisSpiller/#SPILLERID`, klassen `winner` på vinnersiden),
+  `td.result` = `"16/21,21/13,21/16"` (side 1/side 2 per sett) eller `"W.O."`.
+- `/api` cacher `SearchTournamentResults`/`SearchTournamentMatches` (6 t) og profiler fra tidligere sesonger (7 d) i
+  Cloudflare Cache. Nåværende sesongs profil caches ikke, fordi rankingen da blir utdatert.
+
+---
+
 ## app.js – viktige funksjoner
 
 | Funksjon | Beskrivelse |
@@ -125,6 +139,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `visTurnering(t)` | Renderer én turnering med kamper og gruppe-knapp |
 | `cup2000Api(navn, url)` | Henter kampprogram fra `/cup2000` (2 min cache) |
 | `cup2000LiveApi(navn)` | Henter live-oversikt fra `/cup2000live` (30 sek cache) |
+| `visH2H(motId, motNavn)` | Head-to-head mot en motstander (spiller-ID fra `hentMotstanderRanking`). `hentH2H` finner felles klasser i spillernes profiler per sesong, grener der begge er med, og kampene deres |
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |
