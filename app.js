@@ -547,7 +547,9 @@ function finnTurneringer() {
       var dayM = dager.match(/(\d+)\.?\s*[-\u2010-\u2015\u2212]\s*(\d+)/);
       var endDay = dayM ? parseInt(dayM[2]) : parseInt(parts[0]);
       var endDate = new Date(year, month, endDay);
+      var startDate = new Date(year, month, parseInt(parts[0]));
       kmap[tid].isPast = (endDate < today);
+      kmap[tid].harStartet = (startDate <= today);
       return endDate >= cutoff;
     });
     sett('Sjekker ' + tids.length + ' turneringer...');
@@ -588,6 +590,7 @@ function finnTurneringer() {
         if (!aktiveTids[tid] && !sjekkdeTids[tid]) {
           var lt = lagrede[tid];
           lt.isPast = true;
+          lt.harStartet = true;
           aktive.push(lt);
         }
       });
@@ -636,7 +639,7 @@ function sjekkTurnering(tid, info) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
     if (!regs.length) return null;
-    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller, isPast: !!info.isPast };
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, klasser: klasserMedSpiller, isPast: !!info.isPast, harStartet: !!info.harStartet };
   });
 }
 
@@ -831,7 +834,7 @@ function visTurnering(t) {
   var _mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
   var _dp = (t.dato || '').split('.');
   var _turDato = t.dager ? t.dager.replace(/\.\s*$/, '') + '. ' + (_dp[1] ? _mnd[parseInt(_dp[1])-1] : '') + (_dp[2] ? ' ' + _dp[2] : '') : (t.dato || '');
-  var liveKnappHtml = t.isPast ? '' : ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + escAttrJs(t.navn||'') + '\')">📋 Live</button>';
+  var liveKnappHtml = (t.isPast || !t.harStartet) ? '' : ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + t.tournamentId + '\',\'' + escAttrJs(t.navn||'') + '\',\'' + escAttrJs(t.cup2000Url||'') + '\')">📋 Live</button>';
   sec.innerHTML = '<div class="sk-sek-banner"><h3>' + esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
   res.appendChild(sec);
   var div = document.createElement('div');
@@ -1411,15 +1414,18 @@ function cup2000LiveApi(tournamentNavn) {
   }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
 }
 
-function visLive(tournamentId, tournamentNavn) {
+function visLive(tournamentId, tournamentNavn, cup2000Url) {
   var overlay = document.createElement('div');
   overlay.className = 'sk-gruppe-overlay';
   overlay.id = 'sk-live-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) lukkLive(); };
 
+  var resultaterBtn = cup2000Url ? '<a class="sk-live-refresh-btn" href="' + cup2000Url + '&lr=1" target="_blank" title="Siste resultater">🏆</a>' : '';
+
   overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
     + '<div class="sk-gruppe-hdr">'
     + '<span class="sk-gruppe-tittel">📋 Kamper nå</span>'
+    + resultaterBtn
     + '<button class="sk-live-refresh-btn" id="sk-live-refresh" onclick="oppdaterLive(\'' + escAttrJs(tournamentNavn) + '\')">↻</button>'
     + '<button class="sk-gruppe-xbtn" onclick="lukkLive()">✕</button>'
     + '</div>'
