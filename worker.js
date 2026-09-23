@@ -735,8 +735,10 @@ async function handleRequest(request, env) {
 
   if (path === '/stats') {
     const authHeader = request.headers.get('Authorization') || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token || token !== env.STATS_TOKEN) return json({error: 'Unauthorized'}, 401);
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const forventet = String(env.STATS_TOKEN || '').trim();
+    if (!forventet) return json({error: 'STATS_TOKEN er ikke satt i workeren'}, 500);
+    if (!token || token !== forventet) return json({error: 'Unauthorized'}, 401);
     const account_id = 'b88a9b1ba068ad113b6ed1b8266d3587';
     const query = `
       SELECT blob1 as navn, blob2 as klubb, blob3 as resultat, count() as antall
@@ -794,8 +796,10 @@ async function handleRequest(request, env) {
 
   if (path === '/push/test') {
     const authHeader = request.headers.get('Authorization') || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token || token !== env.STATS_TOKEN) return json({error: 'Unauthorized'}, 401);
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const forventet = String(env.STATS_TOKEN || '').trim();
+    if (!forventet) return json({error: 'STATS_TOKEN er ikke satt i workeren'}, 500);
+    if (!token || token !== forventet) return json({error: 'Unauthorized'}, 401);
 
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
