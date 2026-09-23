@@ -101,8 +101,8 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-res-sett { font-size: 11px; color: #53d8fb; margin-top: 3px; font-variant-numeric: tabular-nums; }
 #topbar { background: #16213e; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); border-bottom: 2px solid #0f3460; display: flex; align-items: center; gap: 10px; }
 #topbar-main { flex: 1; }
-#topbar h1 { font-size: 22px; color: #e94560; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 2px; display: flex; align-items: center; gap: 7px; }
-#topbar h1 .logo { width: 1.3em; height: 1.3em; flex-shrink: 0; }
+#topbar h1 { font-size: 22px; color: #e94560; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+#topbar h1 .logo { width: 1.1em; height: 1.1em; flex-shrink: 0; }
 #topbar .tagline { font-size: 11px; color: #53d8fb; letter-spacing: .04em; }
 #auth-area { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 #login-btn { background: none; border: 1px solid #0f3460; color: #888; border-radius: 8px; padding: 10px 14px; font-size: 12px; cursor: pointer; white-space: nowrap; }
