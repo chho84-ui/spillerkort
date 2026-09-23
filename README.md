@@ -1,6 +1,6 @@
 # Goodminton
 
-Webapp som viser spillerkort, ranking, påmeldinger og kampprogram (med live-score) for badmintonspillere i Norge.
+Webapp som viser ranking, påmeldinger og kampprogram (med live-score) for badmintonspillere i Norge.
 
 Bygget på data fra badmintonportalen.no og cup2000.dk.
 

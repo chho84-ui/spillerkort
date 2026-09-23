@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
-<title>Goodminton – Spillerkort</title>
+<title>Goodminton – ranking, kamper og resultater</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -24,7 +24,7 @@
 <div id="topbar">
   <div id="topbar-main">
     <h1><img class="logo" src="logo.png" alt="" width="24" height="24">Goodminton</h1>
-    <div class="tagline">goodminton.no — ditt badminton-spillerkort</div>
+    <div class="tagline">goodminton.no — ranking, kamper og resultater</div>
   </div>
   <div id="auth-area">
     <button id="login-btn" onclick="loggInn()" style="display:none">Logg inn med Google</button>
@@ -38,7 +38,7 @@
 </div>
 
 <div id="infoboks">
-  <p>Søk opp deg selv for å se <strong>ranking</strong> i alle grener, <strong>påmeldinger</strong> til kommende turneringer og <strong>kampprogram</strong> med motstandernes ranking og alder. Trykk på en motstander for å hente opp deres spillerkort.</p>
+  <p>Søk opp deg selv for å se <strong>ranking</strong> i alle grener, <strong>påmeldinger</strong> til kommende turneringer og <strong>kampprogram</strong> med motstandernes ranking og alder. Under turneringer kan du følge kampene live og se siste resultater. Trykk på en motstander for å søke opp dem.</p>
 </div>
 
 <div id="formkort">
@@ -51,7 +51,7 @@
   <label id="klubb-label">Klubb <span style="color:#555;font-weight:normal">(valgfritt)</span>
     <input id="f-klubb" type="text" placeholder="Sotra" autocomplete="off">
   </label>
-  <button id="hent-btn" onclick="hent()">🔍 Hent spillerkort</button>
+  <button id="hent-btn" onclick="hent()">🔍 Søk</button>
 </div>
 
 <div id="auth-modal" style="display:none">
@@ -74,7 +74,7 @@
 </div>
 
 <div id="resultat">
-  <div class="sk-status" id="st">Fyll inn spillerinfo og trykk Hent.</div>
+  <div class="sk-status" id="st">Skriv inn et navn og trykk Søk.</div>
 </div>
 
 <script src="app.js?v=7"></script>

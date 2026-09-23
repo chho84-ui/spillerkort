@@ -4,7 +4,7 @@ Instruksjoner til Claude Code for dette prosjektet. Les dette før du gjør noe 
 
 ## Hva er dette?
 
-Webapp som viser spillerkort, ranking og kampprogram for badmintonspillere i Norge.
+Webapp som viser ranking, påmeldinger, kampprogram, live-kamper og resultater for badmintonspillere i Norge.
 - **Frontend:** `index.html` + `app.js` + `style.css` → hostet på GitHub Pages → goodminton.no
 - **Backend:** `worker.js` → Cloudflare Worker → spillerkort-proxy.chho84.workers.dev
 - **Kildekode:** github.com/chho84-ui/spillerkort

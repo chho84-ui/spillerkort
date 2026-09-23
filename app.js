@@ -1580,7 +1580,7 @@ function hent() {
     if (data.error || !data.playerid) {
       sett('Fant ikke spiller: ' + SN + ' / ' + SK);
       btn.disabled = false;
-      btn.textContent = '🔍 Hent spillerkort';
+      btn.textContent = '🔍 Søk';
       return;
     }
     SI = data.playerid;
@@ -1611,7 +1611,7 @@ function hent() {
   }).finally(function() {
     if (gen === _hentGen) {
       btn.disabled = false;
-      btn.textContent = '🔍 Hent spillerkort';
+      btn.textContent = '🔍 Søk';
     }
   });
 }
