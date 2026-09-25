@@ -765,11 +765,13 @@ function sett(tekst) {
 }
 
 function visRanking(rows) {
-  if (!rows || !rows.length) return;
+  rows = rows || [];
   var res = document.getElementById('resultat');
   var sec = document.createElement('div');
   sec.className = 'sk-sek';
-  sec.innerHTML = '<h3>Ranking</h3><div class="sk-grid" id="sk-rg"></div>';
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>Ranking</h3>'
+    + '<button class="sk-live-btn" onclick="visResultater()">📈 Resultater</button></div>'
+    + (rows.length ? '<div class="sk-grid" id="sk-rg"></div>' : '');
   res.appendChild(sec);
   var grid = document.getElementById('sk-rg');
   for (var i = 0; i < rows.length; i++) {
@@ -1603,14 +1605,14 @@ function h2hProfil(pid, seasonid) {
     });
 }
 
-// Grener i klassen der begge spillerne står på resultatlisten: [{ eid, gren }]
+// Grener i klassen der A (og B, hvis oppgitt) står på resultatlisten: [{ eid, gren }]
 function h2hGrener(cid, idA, idB) {
   return apiHtml('SearchTournamentResults', { tournamentclassid: parseInt(cid), clientselectfunction: 'SelectTournamentClass1' })
     .then(function(html) {
       var grener = [];
       html.split('<h2>').slice(1).forEach(function(del) {
         var em = del.match(/SelectEvent\('\d+',\s*'(\d+)'\)/);
-        if (em && del.indexOf('VisSpiller/#' + idA + "'") !== -1 && del.indexOf('VisSpiller/#' + idB + "'") !== -1) {
+        if (em && del.indexOf('VisSpiller/#' + idA + "'") !== -1 && (!idB || del.indexOf('VisSpiller/#' + idB + "'") !== -1)) {
           grener.push({ eid: em[1], gren: del.slice(0, del.indexOf('</h2>')).trim() });
         }
       });
@@ -1618,7 +1620,7 @@ function h2hGrener(cid, idA, idB) {
     });
 }
 
-// Kamper i en gren der A og B står på hver sin side av nettet.
+// Kamper i en gren der A spilte (og B, hvis oppgitt, sto på andre siden av nettet).
 function h2hKamper(cid, eid, idA, idB) {
   return apiHtml('SearchTournamentMatches', { tournamentclassid: String(cid), tournamenteventid: String(eid), clientselectfunction: 'SelectTournamentClass1' })
     .then(function(html) {
@@ -1637,7 +1639,7 @@ function h2hKamper(cid, eid, idA, idB) {
           return { spillere: spillere, vinner: tds[si].classList.contains('winner') };
         });
         function har(side, id) { return sider[side].spillere.some(function(p) { return p.id === id; }); }
-        var a = har(0, idA) && har(1, idB) ? 0 : har(1, idA) && har(0, idB) ? 1 : -1;
+        var a = har(0, idA) && (!idB || har(1, idB)) ? 0 : har(1, idA) && (!idB || har(0, idB)) ? 1 : -1;
         if (a < 0) return;
         var resEl = tr.querySelector('td.result');
         var score = resEl ? resEl.textContent.trim() : '';
@@ -1753,6 +1755,121 @@ function renderH2H(data, motNavn) {
 
 function lukkH2H() {
   var el = document.getElementById('sk-h2h-overlay');
+  if (el) el.remove();
+}
+
+// ── Spillerens siste resultater ─────────────────────────────────────────
+var RES_SIDE = 5;
+var _res = null;
+
+function visResultater() {
+  lukkResultater();
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-resh-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkResultater(); };
+  overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">📈 ' + esc(SN) + '</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkResultater()">✕</button>'
+    + '</div>'
+    + '<div id="sk-resh-sum"></div>'
+    + '<div id="sk-resh-liste"></div>'
+    + '<div id="sk-resh-mer" style="font-size:12px;color:#888;text-align:center;padding:16px">Henter resultater…</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  _res = { pid: String(SI), sesong: parseInt(String(SS).slice(3)), klasser: [], vist: 0, seire: 0, tap: 0, turneringer: 0 };
+  lastFlereResultater();
+}
+
+// Fyller _res.klasser (nyeste først) til det finnes nok uviste klasser, eller sesongene er brukt opp.
+function resFyllKlasser(st) {
+  if (st.klasser.length - st.vist >= RES_SIDE || st.sesong < 2013) return Promise.resolve();
+  var sesong = st.sesong--;
+  return h2hProfil(st.pid, '200' + sesong).then(function(p) {
+    function dkey(d) { var s = String(d || '').split('.'); return (s[2] || '') + (s[1] || '') + (s[0] || ''); }
+    var nye = Object.keys(p.klasser).map(function(cid) { return Object.assign({ cid: cid }, p.klasser[cid]); });
+    nye.sort(function(x, y) { return dkey(y.dato).localeCompare(dkey(x.dato)); });
+    st.klasser = st.klasser.concat(nye);
+    if (p.fodt && sesong <= p.fodt + 6) st.sesong = 0;
+    return resFyllKlasser(st);
+  });
+}
+
+function lastFlereResultater() {
+  var st = _res;
+  var mer = document.getElementById('sk-resh-mer');
+  if (mer) mer.innerHTML = 'Henter resultater…';
+  resFyllKlasser(st).then(function() {
+    var side = st.klasser.slice(st.vist, st.vist + RES_SIDE);
+    return h2hPool(side.map(function(k) {
+      return function() {
+        return h2hGrener(k.cid, st.pid).then(function(grener) {
+          return Promise.all(grener.map(function(g) {
+            return h2hKamper(k.cid, g.eid, st.pid).then(function(ks) {
+              ks.forEach(function(x) { x.gren = g.gren; });
+              return ks;
+            });
+          }));
+        }).then(function(perGren) {
+          var kamper = [];
+          perGren.forEach(function(ks) { ks.forEach(function(x) { kamper.push(x); }); });
+          return { k: k, kamper: kamper };
+        });
+      };
+    }), 3).then(function(res) {
+      if (st !== _res) return;
+      st.vist += side.length;
+      var liste = document.getElementById('sk-resh-liste');
+      if (!liste) return;
+      res.forEach(function(r) {
+        if (!r || !r.kamper.length) return;
+        st.turneringer++;
+        r.kamper.forEach(function(x) { if (x.wo) return; if (x.vant) st.seire++; else st.tap++; });
+        liste.insertAdjacentHTML('beforeend', renderResTurnering(r.k, r.kamper, st.pid));
+      });
+      var sum = document.getElementById('sk-resh-sum');
+      if (sum && st.turneringer) {
+        sum.innerHTML = '<div class="sk-h2h-sum"><span class="sk-h2h-tall">' + st.seire + ' – ' + st.tap + '</span>'
+          + '<span class="sk-h2h-sub">seire og tap i ' + st.turneringer + (st.turneringer === 1 ? ' turnering' : ' turneringer') + '</span></div>';
+      }
+      var flere = st.vist < st.klasser.length || st.sesong >= 2013;
+      if (!mer) return;
+      if (flere) mer.innerHTML = '<button class="sk-live-btn" onclick="lastFlereResultater()">Vis flere</button>';
+      else mer.innerHTML = st.turneringer ? '' : 'Ingen resultater funnet';
+    });
+  }).catch(function() {
+    if (mer && st === _res) mer.innerHTML = '<span style="color:#e94560">Kunne ikke hente resultater</span>';
+  });
+}
+
+function renderResTurnering(k, kamper, pid) {
+  function navn(sp, klikk) {
+    return sp.map(function(s) {
+      if (!klikk || !s.id) return esc(s.navn);
+      return '<span class="sk-mot-link" onclick="visH2H(\'' + escAttrJs(s.id) + '\',\'' + escAttrJs(s.navn) + '\')">' + esc(s.navn) + '</span>';
+    }).join(' / ');
+  }
+  var html = '<div class="sk-resh-tur">'
+    + '<div class="sk-resh-tur-hdr"><span>' + esc(k.turnering) + '</span><span class="sk-live-tid">' + esc(k.dato) + '</span></div>';
+  kamper.forEach(function(x) {
+    var makker = x.meg.filter(function(s) { return s.id !== pid; });
+    html += '<div class="sk-live-kamp">'
+      + '<div class="sk-live-kamp-top">'
+      + '<span class="sk-live-disc">' + esc(x.gren) + ' ' + esc(k.klasse) + ' · ' + esc(x.runde) + '</span>'
+      + '<span class="' + (x.wo ? 'sk-resh-wo' : x.vant ? 'sk-resh-v' : 'sk-resh-t') + '">' + (x.wo ? 'W.O.' : x.vant ? 'Seier' : 'Tap') + '</span>'
+      + '</div>'
+      + (makker.length ? '<div class="sk-live-disc">med ' + navn(makker, false) + '</div>' : '')
+      + '<div class="sk-live-sp">mot ' + navn(x.mot, true) + '</div>'
+      + (x.sett.length ? '<div class="sk-res-sett">' + esc(x.sett.join(', ')) + '</div>' : '')
+      + '</div>';
+  });
+  return html + '</div>';
+}
+
+function lukkResultater() {
+  _res = null;
+  var el = document.getElementById('sk-resh-overlay');
   if (el) el.remove();
 }
 

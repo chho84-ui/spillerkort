@@ -102,6 +102,11 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-h2h-sum { text-align: center; padding: 6px 0 12px; margin-bottom: 8px; border-bottom: 1px solid #1a3a6a; }
 .sk-h2h-tall { display: block; font-size: 28px; font-weight: 900; color: #e94560; letter-spacing: 1px; }
 .sk-h2h-sub { font-size: 11px; color: #888; }
+.sk-resh-tur { margin-bottom: 12px; }
+.sk-resh-tur-hdr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; font-weight: bold; color: #e0e0e0; padding: 4px 0 6px; border-bottom: 1px solid #1a3a6a; margin-bottom: 6px; }
+.sk-resh-v { font-size: 10px; font-weight: bold; color: #4caf50; }
+.sk-resh-t { font-size: 10px; font-weight: bold; color: #e94560; }
+.sk-resh-wo { font-size: 10px; color: #888; }
 .sk-res-sett { font-size: 11px; color: #53d8fb; margin-top: 3px; font-variant-numeric: tabular-nums; }
 #topbar { background: #16213e; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); border-bottom: 2px solid #0f3460; display: flex; align-items: center; gap: 10px; }
 #topbar-main { flex: 1; }

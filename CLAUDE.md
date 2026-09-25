@@ -140,6 +140,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `cup2000Api(navn, url)` | Henter kampprogram fra `/cup2000` (2 min cache) |
 | `cup2000LiveApi(navn)` | Henter live-oversikt fra `/cup2000live` (30 sek cache) |
 | `visH2H(motId, motNavn)` | Head-to-head mot en motstander (spiller-ID fra `hentMotstanderRanking`). `hentH2H` finner felles klasser i spillernes profiler per sesong, grener der begge er med, og kampene deres |
+| `visResultater()` | «📈 Resultater» på ranking-banneret: den søkte spillerens kamper, nyeste turnering først, 5 om gangen (`RES_SIDE`). Bruker samme kall som H2H uten motstander. Motstandernavn åpner H2H |
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |
