@@ -770,7 +770,7 @@ function visRanking(rows) {
   var sec = document.createElement('div');
   sec.className = 'sk-sek';
   sec.innerHTML = '<div class="sk-sek-banner"><h3>Ranking</h3>'
-    + '<button class="sk-live-btn" onclick="visResultater()">📈 Resultater</button></div>'
+    + '<button class="sk-live-btn" onclick="visResultater()">📈 Siste kamper</button></div>'
     + (rows.length ? '<div class="sk-grid" id="sk-rg"></div>' : '');
   res.appendChild(sec);
   var grid = document.getElementById('sk-rg');

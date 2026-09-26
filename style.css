@@ -49,8 +49,8 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-mot-link { cursor: pointer; display: inline-block; padding: 4px 2px; margin: -4px -2px; }
 .sk-mot-link:hover { color: #53d8fb; text-decoration: underline; }
 .sk-mot-link:active { color: #53d8fb; }
-.sk-sek-banner { display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; margin-bottom: 8px; }
-.sk-sek-banner h3 { flex: 1 1 150px; margin: 0; }
+.sk-sek-banner { display: flex; flex-wrap: wrap; align-items: stretch; row-gap: 6px; margin-bottom: 8px; }
+.sk-sek-banner h3 { flex: 1 1 150px; margin: 0; display: flex; align-items: center; }
 .sk-varsle-mini { background: none; border: 1px solid #333; color: #777; border-radius: 6px; padding: 8px 12px; font-size: 11px; cursor: pointer; white-space: nowrap; margin-left: 6px; flex-shrink: 0; }
 .sk-varsle-mini:hover { border-color: #e94560; color: #e94560; }
 .sk-varsle-btn { display: block; width: 100%; background: #0a1628; border: 1px solid #0f3460; color: #aaa; border-radius: 6px; padding: 7px; font-size: 12px; cursor: pointer; margin-top: 6px; text-align: center; }
