@@ -156,10 +156,10 @@ async function handleRequest(request, env) {
     const naa = new Date();
     const gjeldendeSesong = 2000000 + (naa.getMonth() >= 6 ? naa.getFullYear() : naa.getFullYear() - 1);
     let ttl = 0;
-    if (body.method === 'SearchTournamentMatches' || body.method === 'SearchTournamentResults') ttl = 6 * 3600;
+    if (body.method === 'SearchTournamentMatches' || body.method === 'SearchTournamentResults') ttl = 3600;
     if (body.method === 'GetPlayerProfile' && Number(body.data && body.data.seasonid) < gjeldendeSesong) ttl = 7 * 86400;
     const cacheKey = ttl ? new Request('https://cache.goodminton.no/api/' + body.method + '?' + encodeURIComponent(JSON.stringify(body.data))) : null;
-    if (cacheKey) {
+    if (cacheKey && !body.fersk) {
       const hit = await caches.default.match(cacheKey);
       if (hit) return json(await hit.json());
     }
@@ -173,7 +173,9 @@ async function handleRequest(request, env) {
       body: JSON.stringify(body.data)
     });
     const result = await r.json();
-    if (cacheKey && r.ok) {
+    // Tomme svar (f.eks. resultater som ikke er publisert ennå) caches ikke.
+    const html = result && result.d && (result.d.Html || result.d.html);
+    if (cacheKey && r.ok && html) {
       await caches.default.put(cacheKey, new Response(JSON.stringify(result), {
         headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=' + ttl }
       }));

@@ -126,8 +126,10 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 - `SearchTournamentMatches { tournamentclassid, tournamenteventid, clientselectfunction }` → `table.matchlist`:
   `tr.headrow` = runde, `td.player` ×2 (lenker `VisSpiller/#SPILLERID`, klassen `winner` på vinnersiden),
   `td.result` = `"16/21,21/13,21/16"` (side 1/side 2 per sett) eller `"W.O."`.
-- `/api` cacher `SearchTournamentResults`/`SearchTournamentMatches` (6 t) og profiler fra tidligere sesonger (7 d) i
-  Cloudflare Cache. Nåværende sesongs profil caches ikke, fordi rankingen da blir utdatert.
+- `/api` cacher `SearchTournamentResults`/`SearchTournamentMatches` (1 t) og profiler fra tidligere sesonger (7 d) i
+  Cloudflare Cache. Nåværende sesongs profil caches ikke, fordi rankingen da blir utdatert. Tomme svar caches ikke.
+  `api(method, data, true)` sender `fersk: true`, som hopper over cachen. Brukes for sluttresultat i gruppevisning og
+  resultater for nylig ferdigspilte turneringer.
 
 ---
 
@@ -144,7 +146,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |
-| `visGruppe(g)` | Åpner gruppestillings-overlay |
+| `visGruppe(g, hentNy)` | Åpner gruppestillings-overlay. `hentNy` gir oppdaterknappen (↻), som henter gruppen fra cup2000 og sluttresultatet på nytt |
 | `aapneMotstander(navn, klubb)` | Søker opp motstander |
 | `discTilKode(disc)` | Konverterer "Herresingle" → "HS" etc. |
 | `parseTid(tid)` | Parser "DD-MM HH:MM" til Date |
