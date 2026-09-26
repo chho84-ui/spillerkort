@@ -401,11 +401,12 @@ function sokSpiller(navn, klubb) {
   }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
 }
 
-function api(method, data) {
+// fersk = true: workeren hopper over sin cache (for data som kan endre seg under en turnering).
+function api(method, data, fersk) {
   return fetch(PROXY + '/api', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ method: method, data: data })
+    body: JSON.stringify({ method: method, data: data, fersk: !!fersk })
   }).then(function(r) { return r.json(); });
 }
 
@@ -924,7 +925,7 @@ function visTurnering(t) {
             return api('SearchTournamentResults', {
               tournamentclassid: parseInt(kl.id),
               clientselectfunction: 'SelectTournamentClass1'
-            }).then(function(res) {
+            }, true).then(function(res) {
               var html = String((res.d && res.d.Html) || '');
               if (!html) return null;
               var doc2 = new DOMParser().parseFromString(html, 'text/html');
@@ -1102,7 +1103,20 @@ function visTurnering(t) {
               var gruppeBtn = document.createElement('button');
               gruppeBtn.className = 'sk-gruppe-btn';
               gruppeBtn.textContent = '\uD83D\uDCCA Vis gruppe (' + g.spillere.length + ' spillere)';
-              (function(gData) { gruppeBtn.onclick = function() { visGruppe(gData); }; })(g);
+              (function(gData, tNavn, tUrl) {
+                gruppeBtn.onclick = function() {
+                  visGruppe(gData, function() {
+                    delete _cache['cup2000:' + tNavn + '|' + SN];
+                    return cup2000Api(tNavn, tUrl).then(function(d) {
+                      var gr = (d && d.grupper) || [];
+                      var ny = gr.find(function(x) { return x.disc === gData.disc && x.ageGroup === gData.ageGroup; })
+                        || gr.find(function(x) { return x.disc === gData.disc; });
+                      if (ny) ny.klasser = gData.klasser;
+                      return ny;
+                    });
+                  });
+                };
+              })(g, t.navn, t.cup2000Url);
               kl.parentNode.insertBefore(gruppeBtn, kl.nextSibling);
             }
           }
@@ -1314,7 +1328,8 @@ function sendVarsel(btn, tournamentNavn, cup2000Url) {
   });
 }
 
-function visGruppe(g) {
+// hentNy (valgfri): funksjon som henter gruppen på nytt og returnerer Promise<g>.
+function visGruppe(g, hentNy) {
   var DISC_FULL = { HS: 'Herresingle', DS: 'Damesingle', HD: 'Herredouble', DD: 'Damedouble', MD: 'Mixed' };
   var overlay = document.createElement('div');
   overlay.className = 'sk-gruppe-overlay';
@@ -1355,61 +1370,77 @@ function visGruppe(g) {
       + '</table>';
   }
 
+  var sisteSlutt = null;
   function oppdater(sluttRows) {
     var panel = overlay.querySelector('.sk-gruppe-panel');
     if (!panel) return;
+    if (sluttRows) sisteSlutt = sluttRows;
     var content = gruppefaseHTML();
-    if (sluttRows) content += sluttresultatHTML(sluttRows);
+    if (sisteSlutt) content += sluttresultatHTML(sisteSlutt);
     panel.querySelector('.sk-gruppe-innhold').innerHTML = content;
   }
 
   overlay.innerHTML = '<div class="sk-gruppe-panel">'
     + '<div class="sk-gruppe-hdr">'
     + '<span class="sk-gruppe-tittel">' + esc(g.disc) + ' ' + esc(g.ageGroup) + ' \u2014 Gruppestilling</span>'
+    + (hentNy ? '<button class="sk-live-refresh-btn" title="Oppdater">\u21bb</button>' : '')
     + '<button class="sk-gruppe-xbtn" onclick="lukkGruppe()">\u2715</button>'
     + '</div>'
     + '<div class="sk-gruppe-innhold">' + gruppefaseHTML() + '</div>'
     + '</div>';
   document.body.appendChild(overlay);
 
-  // Hent sluttresultat asynkront
-  var kl = g.klasser && g.klasser.find(function(k) { return k.name === g.ageGroup; });
-  if (!kl) return;
-  api('SearchTournamentResults', {
-    tournamentclassid: parseInt(kl.id),
-    clientselectfunction: 'SelectTournamentClass1'
-  }).then(function(res) {
-    var html = String((res.d && res.d.Html) || '');
-    if (!html) return;
-    var doc3 = new DOMParser().parseFromString(html, 'text/html');
-    var discFull = DISC_FULL[g.disc] || '';
-    var h2s = doc3.querySelectorAll('h2');
-    var targetTable = null;
-    for (var hi = 0; hi < h2s.length; hi++) {
-      if (h2s[hi].textContent.toLowerCase().indexOf(discFull.toLowerCase()) !== -1) {
-        var next = h2s[hi].nextElementSibling;
-        while (next && next.tagName !== 'TABLE') next = next.nextElementSibling;
-        if (next) { targetTable = next; break; }
+  var refreshBtn = overlay.querySelector('.sk-live-refresh-btn');
+  if (refreshBtn) refreshBtn.onclick = function() {
+    refreshBtn.disabled = true;
+    hentNy().then(function(ny) {
+      if (ny) g = ny;
+      oppdater();
+      return hentSlutt();
+    }).catch(function() {}).then(function() { refreshBtn.disabled = false; });
+  };
+
+  hentSlutt();
+
+  function hentSlutt() {
+    var kl = g.klasser && g.klasser.find(function(k) { return k.name === g.ageGroup; });
+    if (!kl) return Promise.resolve();
+    return api('SearchTournamentResults', {
+      tournamentclassid: parseInt(kl.id),
+      clientselectfunction: 'SelectTournamentClass1'
+    }, true).then(function(res) {
+      var html = String((res.d && res.d.Html) || '');
+      if (!html) return;
+      var doc3 = new DOMParser().parseFromString(html, 'text/html');
+      var discFull = DISC_FULL[g.disc] || '';
+      var h2s = doc3.querySelectorAll('h2');
+      var targetTable = null;
+      for (var hi = 0; hi < h2s.length; hi++) {
+        if (h2s[hi].textContent.toLowerCase().indexOf(discFull.toLowerCase()) !== -1) {
+          var next = h2s[hi].nextElementSibling;
+          while (next && next.tagName !== 'TABLE') next = next.nextElementSibling;
+          if (next) { targetTable = next; break; }
+        }
       }
-    }
-    if (!targetTable) return;
-    var sluttRows = [];
-    var trs3 = targetTable.querySelectorAll('tr:not(.headrow)');
-    var lastPlass = '';
-    for (var ri = 0; ri < trs3.length; ri++) {
-      var playerCell = trs3[ri].querySelector('td.player');
-      var pointsCell = trs3[ri].querySelector('td.points');
-      var rankCell = trs3[ri].querySelector('td.rank');
-      if (!playerCell) continue;
-      var plass = rankCell ? rankCell.textContent.trim() : '';
-      if (plass) lastPlass = plass;
-      var pts = pointsCell ? pointsCell.textContent.trim() : '';
-      var navn = playerCell.textContent.split(',')[0].trim();
-      var klubb = (playerCell.textContent.split(',')[1] || '').trim();
-      sluttRows.push({ plass: plass || lastPlass, navn: navn, klubb: klubb, poeng: pts });
-    }
-    if (sluttRows.length) oppdater(sluttRows);
-  }).catch(function() {});
+      if (!targetTable) return;
+      var sluttRows = [];
+      var trs3 = targetTable.querySelectorAll('tr:not(.headrow)');
+      var lastPlass = '';
+      for (var ri = 0; ri < trs3.length; ri++) {
+        var playerCell = trs3[ri].querySelector('td.player');
+        var pointsCell = trs3[ri].querySelector('td.points');
+        var rankCell = trs3[ri].querySelector('td.rank');
+        if (!playerCell) continue;
+        var plass = rankCell ? rankCell.textContent.trim() : '';
+        if (plass) lastPlass = plass;
+        var pts = pointsCell ? pointsCell.textContent.trim() : '';
+        var navn = playerCell.textContent.split(',')[0].trim();
+        var klubb = (playerCell.textContent.split(',')[1] || '').trim();
+        sluttRows.push({ plass: plass || lastPlass, navn: navn, klubb: klubb, poeng: pts });
+      }
+      if (sluttRows.length) oppdater(sluttRows);
+    }).catch(function() {});
+  }
 }
 
 function lukkGruppe() {
