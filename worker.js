@@ -7,7 +7,8 @@ const CORS = {
 };
 
 // Parameternavn som velger spillested hos cup2000 (ukjent, finnes ved å prøve kandidater; huskes per isolate).
-const STED_KANDIDATER = ['l', 's', 'v', 'h', 'sp', 'ps', 'loc', 'location', 'venue', 'sted', 'hal', 'hall', 'pl', 'place'];
+// 'p' først: cup2000-siden abonnerer på live-grupper «ID-P-0», «ID-P-1» (P = place/spillested).
+const STED_KANDIDATER = ['p', 'l', 's', 'v', 'h', 'pid', 'placeid', 'lid', 'sid', 'hid', 'sp', 'ps', 'loc', 'location', 'venue', 'sted', 'hal', 'hall', 'pl', 'place'];
 let STED_PARAM;
 
 let cachedCtx = null;
