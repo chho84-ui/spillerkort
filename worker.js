@@ -8,7 +8,7 @@ const CORS = {
 
 // Parameternavn som velger spillested hos cup2000 (ukjent, finnes ved å prøve kandidater; huskes per isolate).
 // 'p' først: cup2000-siden abonnerer på live-grupper «ID-P-0», «ID-P-1» (P = place/spillested).
-const STED_KANDIDATER = ['p', 'l', 's', 'v', 'h', 'pid', 'placeid', 'lid', 'sid', 'hid', 'sp', 'ps', 'loc', 'location', 'venue', 'sted', 'hal', 'hall', 'pl', 'place'];
+const STED_KANDIDATER = ['per', 'period', 'pe', 'hp', 'pi', 'vp', 'p', 'l', 's', 'v', 'h', 'pid', 'placeid', 'lid', 'sid', 'hid', 'sp', 'ps', 'loc', 'location', 'venue', 'sted', 'hal', 'hall', 'pl', 'place'];
 let STED_PARAM;
 
 let cachedCtx = null;
@@ -119,13 +119,17 @@ async function handleRequest(request, env) {
         kilder.push({ navn: abs.replace('https://www.cup2000.dk', ''), tekst: await (await fetch(abs, { headers: UA })).text() });
       } catch (e) { ut.push('!! kunne ikke hente ' + src); }
     }));
-    const monster = /document\.cookie|setCookie|getCookie|\$\.cookie|localStorage|sessionStorage|SearchTournamentsService|[?&](p|pl|place|sted|l|loc)=|selectPlace|Place|spillested|onchange/gi;
+    // ?s=ord1|ord2 søker etter egne ord (bare bokstaver/tall/_), f.eks. ?s=period|venue|date
+    const sok = (url.searchParams.get('s') || '').split('|').map(x => x.replace(/[^\w]/g, '')).filter(Boolean);
+    const monster = sok.length ? new RegExp(sok.join('|'), 'gi')
+      : /document\.cookie|setCookie|getCookie|\$\.cookie|localStorage|sessionStorage|SearchTournamentsService|[?&](p|pl|place|sted|l|loc)=|selectPlace|Place|spillested|onchange/gi;
+    const maks = sok.length ? 60 : 25, foer = sok.length ? 200 : 120, etter = sok.length ? 260 : 160;
     for (const k of kilder) {
       const funn = [];
       let m;
       monster.lastIndex = 0;
-      while ((m = monster.exec(k.tekst)) !== null && funn.length < 25) {
-        const fra = Math.max(0, m.index - 120), til = Math.min(k.tekst.length, m.index + 160);
+      while ((m = monster.exec(k.tekst)) !== null && funn.length < maks) {
+        const fra = Math.max(0, m.index - foer), til = Math.min(k.tekst.length, m.index + etter);
         if (funn.length && fra < funn[funn.length - 1].til) { funn[funn.length - 1].til = til; continue; }
         funn.push({ fra, til });
       }
@@ -133,7 +137,7 @@ async function handleRequest(request, env) {
       ut.push('\n== ' + k.navn + ' (' + k.tekst.length + ' tegn)');
       funn.forEach(f => ut.push('… ' + k.tekst.slice(f.fra, f.til).replace(/\s+/g, ' ') + ' …'));
     }
-    return new Response(ut.join('\n').slice(0, 12000), { headers: { ...CORS, 'Content-Type': 'text/plain; charset=utf-8' } });
+    return new Response(ut.join('\n').slice(0, 30000), { headers: { ...CORS, 'Content-Type': 'text/plain; charset=utf-8' } });
   }
 
   if (path === '/debug') {
