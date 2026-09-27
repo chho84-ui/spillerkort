@@ -1504,6 +1504,7 @@ function liveKildeInfo(data, visning) {
     return '<div class="sk-live-kilde">cup2000 #' + esc(k.id) + (k.hall ? ' (' + esc(k.hall) + ')' : '') + ': '
       + k.igang + ' i gang, ' + k.neste + ' neste, ' + k.resultater + ' resultater' + (k.feil ? ', feil ved henting' : '')
       + ' · <a href="' + url + '" target="_blank" rel="noopener">åpne</a> · <a href="' + raa + '" target="_blank" rel="noopener">rådata</a>'
+      + (k.valgt ? '<br>Spillested: ' + esc(k.valgt) : '') + (k.sesjon === false ? '<br>Ingen sesjon hos cup2000' : '')
       + (k.struktur ? '<br><span style="opacity:.6">' + esc(k.struktur) + '</span>' : '') + '</div>';
   }).join('');
 }

@@ -695,21 +695,36 @@ async function handleRequest(request, env) {
     const beskriv = d => Array.isArray(d)
       ? '[' + d.map(x => Array.isArray(x) ? 'a' + x.length : x === null ? 'n' : typeof x === 'string' ? 's' : typeof x[0] || typeof x).join(',') + ']'
       : typeof d;
-    const hentLive = async (id, q) => {
+    // Turneringer med flere spillesteder (f.eks. «lørdag», «søndag før 14», «søndag etter 14»): cup2000
+    // husker valgt spillested i sesjonen. Uten cookie får vi ingenting (o=1) eller første spillested
+    // (lr=1 = gårsdagens resultater). Åpne derfor turneringssiden først, som en nettleser, og bruk cookien.
+    const hentSesjon = async (id) => {
       try {
-        const r = await fetch(`${BASE2}?tournamentid=${id}&${q}`, { headers: UA2 });
+        const r = await fetch(`https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=${id}`, { headers: UA2 });
+        await r.arrayBuffer();
+        const raa = typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie()
+          : (r.headers.get('set-cookie') || '').split(/,(?=\s*[^;,\s]+=)/);
+        return raa.map(c => c.split(';')[0].trim()).filter(c => c.includes('=')).join('; ');
+      } catch (e) { return ''; }
+    };
+    const hentLive = async (id, q, cookie) => {
+      try {
+        const r = await fetch(`${BASE2}?tournamentid=${id}&${q}`, { headers: cookie ? { ...UA2, Cookie: cookie } : UA2 });
         const j = await r.json();
         const data = Array.isArray(j.data) ? j.data : [];
+        // data[3][1] = [[indeks, "Sandslihallen Søndag frem til 14:00 (...)"]] = valgt spillested
+        const valgt = Array.isArray(data[3]) && Array.isArray(data[3][1]) && Array.isArray(data[3][1][0]) ? String(data[3][1][0][1] || '') : '';
         const kamper = [];
         if (Array.isArray(data[3])) {
           const d3 = data[3];
           if (erKamp(d3[0])) finnKamper([d3], 0, kamper, 0); else finnKamper(d3, 0, kamper, 0);
         }
         if (!kamper.length) finnKamper(data, 0, kamper, 1);
-        return { kamper, struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
+        return { kamper, valgt: valgt.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))), struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
       } catch (e) { return null; }
     };
-    const perId = await Promise.all(ider.map(id => Promise.all([hentLive(id, 'o=1'), hentLive(id, 'w=1'), hentLive(id, 'lr=1')])));
+    const sesjoner = await Promise.all(ider.map(hentSesjon));
+    const perId = await Promise.all(ider.map((id, i) => Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i])))));
 
     const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
     function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
@@ -758,7 +773,9 @@ async function handleRequest(request, env) {
       const alle = [...raaIgang, ...raaKoe, ...raaSiste];
       const flereGrupper = new Set(alle.filter(x => x.match.length).map(x => x.gruppe)).size > 1;
       const hallFor = gi => [hallNavn[id], flereGrupper ? 'Hall ' + (gi + 1) : ''].filter(Boolean).join(' ');
+      const valgt = (perId[idx].find(x => x && x.valgt) || {}).valgt || '';
       kilder.push({ id, hall: hallNavn[id] || '', igang: raaIgang.length, neste: raaKoe.length, resultater: raaSiste.length,
+        sesjon: !!sesjoner[idx], valgt,
         feil: perId[idx].some(x => x === null), struktur: perId[idx].map(x => x ? x.struktur : 'feil').join(' | ') });
       const seddeKampnr = new Set();
 
