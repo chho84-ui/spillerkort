@@ -98,6 +98,44 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
 
+  // Feilsøking fra mobil: viser utdrag av cup2000-sidens JavaScript som handler om cookies/spillested,
+  // så vi kan se hvordan siden velger spillested. GET /cup2000js?id=11080
+  if (path === '/cup2000js') {
+    const id = (url.searchParams.get('id') || '').replace(/\D/g, '');
+    if (!id) return new Response('Mangler ?id=', { status: 400, headers: CORS });
+    const UA = { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' };
+    const side = await fetch(`https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=${id}&o=1`, { headers: UA });
+    const html = await side.text();
+    const ut = [];
+    const cookies = typeof side.headers.getSetCookie === 'function' ? side.headers.getSetCookie() : [side.headers.get('set-cookie') || ''];
+    ut.push('== Set-Cookie fra siden: ' + cookies.map(c => c.split(';')[0].split('=')[0]).join(', '));
+    const kilder = [{ navn: 'side', tekst: html }];
+    const srcer = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => m[1])
+      .filter(src => !/jquery|bootstrap|signalr|google|gtag|analytics|cookiebot|facebook/i.test(src)).slice(0, 8);
+    ut.push('== Skript: ' + srcer.join(' , '));
+    await Promise.all(srcer.map(async src => {
+      try {
+        const abs = new URL(src, 'https://www.cup2000.dk/turnerings-system/Vis-turneringer/').toString();
+        kilder.push({ navn: abs.replace('https://www.cup2000.dk', ''), tekst: await (await fetch(abs, { headers: UA })).text() });
+      } catch (e) { ut.push('!! kunne ikke hente ' + src); }
+    }));
+    const monster = /document\.cookie|setCookie|getCookie|\$\.cookie|localStorage|sessionStorage|SearchTournamentsService|[?&](p|pl|place|sted|l|loc)=|selectPlace|Place|spillested|onchange/gi;
+    for (const k of kilder) {
+      const funn = [];
+      let m;
+      monster.lastIndex = 0;
+      while ((m = monster.exec(k.tekst)) !== null && funn.length < 25) {
+        const fra = Math.max(0, m.index - 120), til = Math.min(k.tekst.length, m.index + 160);
+        if (funn.length && fra < funn[funn.length - 1].til) { funn[funn.length - 1].til = til; continue; }
+        funn.push({ fra, til });
+      }
+      if (!funn.length) continue;
+      ut.push('\n== ' + k.navn + ' (' + k.tekst.length + ' tegn)');
+      funn.forEach(f => ut.push('… ' + k.tekst.slice(f.fra, f.til).replace(/\s+/g, ' ') + ' …'));
+    }
+    return new Response(ut.join('\n').slice(0, 12000), { headers: { ...CORS, 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
+
   if (path === '/debug') {
     const ctx2 = await getCtx();
     return json({ found: !!ctx2, ctx: ctx2 ? ctx2.substring(0, 20) + '...' : null });
@@ -764,48 +802,48 @@ async function handleRequest(request, env) {
     }));
     enheter.sort((a, b) => a.idIdx - b.idIdx);
 
-    const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
-    function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
-    function decEnt2(s) { return s.replace(/&#(\d+);/g, (_,n) => String.fromCharCode(Number(n))); }
-
-    const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
-    const osloNaa = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
-    const idagOslo = String(osloNaa.getDate()).padStart(2, '0') + '-' + String(osloNaa.getMonth() + 1).padStart(2, '0');
-
-    // match[0] er kampnummer (ikke bane). Ekte bane står kun i match[3] for kamper i gang.
-    function parseKamp(match) {
-      const sp1raw = Array.isArray(match[6]) ? match[6] : [];
-      const sp2raw = Array.isArray(match[7]) ? match[7] : [];
-      const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
-      const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
-      const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
-      const mine = navnDeler.length >= 2
-        ? allNames.some(n => navnDeler.every(del => n.includes(del)))
-        : allNames.some(n => n.includes(navnDeler[0] || ''));
-      const discFull = decEnt2(String(match[4] || ''));
-      const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
-      // Tid: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
-      const raaTid = String(match[2] || '').trim();
-      const klM = raaTid.match(/(\d{1,2})[:.](\d{2})/);
-      const datoM = raaTid.match(/(\d{1,2})-(\d{1,2})(?:-\d{2,4})?/);
-      const kl = klM ? klM[1].padStart(2, '0') + ':' + klM[2] : '';
-      const dato = datoM ? datoM[1].padStart(2, '0') + '-' + datoM[2].padStart(2, '0') : idagOslo;
-      const tid = kl ? dato + ' ' + kl : raaTid;
-      return {
-        kampnr: String(match[0] || ''),
-        tid,
-        disc: discCode2(discFull),
-        discFull,
-        ageGroup: ageGroupM ? ageGroupM[0].toUpperCase() : '',
-        spiller1, spiller2, mine
-      };
-    }
-
-    const kamper2 = [];
-    const resultater = [];
-
-    const kilder = [];
-
+    const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
+    function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
+    function decEnt2(s) { return s.replace(/&#(\d+);/g, (_,n) => String.fromCharCode(Number(n))); }
+
+    const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
+    const osloNaa = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
+    const idagOslo = String(osloNaa.getDate()).padStart(2, '0') + '-' + String(osloNaa.getMonth() + 1).padStart(2, '0');
+
+    // match[0] er kampnummer (ikke bane). Ekte bane står kun i match[3] for kamper i gang.
+    function parseKamp(match) {
+      const sp1raw = Array.isArray(match[6]) ? match[6] : [];
+      const sp2raw = Array.isArray(match[7]) ? match[7] : [];
+      const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+      const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+      const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
+      const mine = navnDeler.length >= 2
+        ? allNames.some(n => navnDeler.every(del => n.includes(del)))
+        : allNames.some(n => n.includes(navnDeler[0] || ''));
+      const discFull = decEnt2(String(match[4] || ''));
+      const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
+      // Tid: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
+      const raaTid = String(match[2] || '').trim();
+      const klM = raaTid.match(/(\d{1,2})[:.](\d{2})/);
+      const datoM = raaTid.match(/(\d{1,2})-(\d{1,2})(?:-\d{2,4})?/);
+      const kl = klM ? klM[1].padStart(2, '0') + ':' + klM[2] : '';
+      const dato = datoM ? datoM[1].padStart(2, '0') + '-' + datoM[2].padStart(2, '0') : idagOslo;
+      const tid = kl ? dato + ' ' + kl : raaTid;
+      return {
+        kampnr: String(match[0] || ''),
+        tid,
+        disc: discCode2(discFull),
+        discFull,
+        ageGroup: ageGroupM ? ageGroupM[0].toUpperCase() : '',
+        spiller1, spiller2, mine
+      };
+    }
+
+    const kamper2 = [];
+    const resultater = [];
+
+    const kilder = [];
+
     const seddePerId = {};
     ider.forEach(id => { seddePerId[id] = { live: new Set(), res: new Set() }; });
 
