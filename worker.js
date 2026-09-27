@@ -719,16 +719,19 @@ async function handleRequest(request, env) {
         const r = await fetch(`${BASE2}?tournamentid=${id}&${q}${extra}`, { headers: cookie ? { ...UA2, Cookie: cookie } : UA2 });
         const j = await r.json();
         const data = Array.isArray(j.data) ? j.data : [];
-        // data[3][1] = [[indeks, "Sandslihallen Søndag frem til 14:00 (...)"]] = valgt spillested; data[6] = alle spillesteder
-        const v = Array.isArray(data[3]) && Array.isArray(data[3][1]) && Array.isArray(data[3][1][0]) ? data[3][1][0] : null;
+        // data[6] = alle spillesteder [[indeks, navn], ...]; data[5] = indeks for valgt spillested.
+        // (data[3][1] = [[1, navn]] har navnet, men tallet der er ikke spillestedsindeksen.)
         const steder = Array.isArray(data[6]) ? data[6].filter(x => Array.isArray(x) && typeof x[1] === 'string').map(x => [x[0], dekod(x[1])]) : [];
+        const d31 = Array.isArray(data[3]) && Array.isArray(data[3][1]) && Array.isArray(data[3][1][0]) ? dekod(data[3][1][0][1]) : '';
+        const stedIdx = typeof data[5] === 'number' && steder.some(x => x[0] === data[5]) ? data[5] : null;
+        const valgt = stedIdx !== null ? steder.find(x => x[0] === stedIdx)[1] : d31;
         const kamper = [];
         if (Array.isArray(data[3])) {
           const d3 = data[3];
           if (erKamp(d3[0])) finnKamper([d3], 0, kamper, 0); else finnKamper(d3, 0, kamper, 0);
         }
         if (!kamper.length) finnKamper(data, 0, kamper, 1);
-        return { kamper, stedIdx: v ? v[0] : null, valgt: v ? dekod(v[1]) : '', steder,
+        return { kamper, stedIdx, valgt, steder,
           struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
       } catch (e) { return null; }
     };
