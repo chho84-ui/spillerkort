@@ -107,6 +107,8 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-resh-v { font-size: 10px; font-weight: bold; color: #4caf50; }
 .sk-resh-t { font-size: 10px; font-weight: bold; color: #e94560; }
 .sk-resh-wo { font-size: 10px; color: #888; }
+.sk-live-kilde { font-size: 10px; color: #666; margin-top: 8px; }
+.sk-live-kilde a { color: #53d8fb; }
 .sk-res-sett { font-size: 11px; color: #53d8fb; margin-top: 3px; font-variant-numeric: tabular-nums; }
 #topbar { background: #16213e; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); border-bottom: 2px solid #0f3460; display: flex; align-items: center; gap: 10px; }
 #topbar-main { flex: 1; }

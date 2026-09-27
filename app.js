@@ -1494,10 +1494,22 @@ function visLive(tournamentNavn, modus, ider) {
   });
 }
 
+// Vises når live-panelet er tomt: hvilke cup2000-turneringer som ble spurt, og hva de ga.
+function liveKildeInfo(data, visning) {
+  if (!data) return '';
+  if (data.ikkeFunnet) return '<div class="sk-live-kilde">Fant ikke turneringen hos cup2000</div>';
+  return (data.kilder || []).map(function(k) {
+    var url = 'https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=' + encodeURIComponent(k.id) + '&' + visning;
+    return '<div class="sk-live-kilde">cup2000 #' + esc(k.id) + (k.hall ? ' (' + esc(k.hall) + ')' : '') + ': '
+      + k.igang + ' i gang, ' + k.neste + ' neste, ' + k.resultater + ' resultater' + (k.feil ? ', feil ved henting' : '')
+      + ' · <a href="' + url + '" target="_blank" rel="noopener">åpne</a></div>';
+  }).join('');
+}
+
 function renderResultater(innhold, data) {
   var res = data && data.resultater ? data.resultater : [];
   if (!res.length) {
-    innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen resultater ennå</div>';
+    innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen resultater ennå' + liveKildeInfo(data, 'lr=1') + '</div>';
     return;
   }
   function navn(sp) { return (sp || []).map(function(s) { return esc(s.navn); }).join(' / '); }
@@ -1524,7 +1536,7 @@ function renderLiveInnhold(data) {
   if (_liveModus === 'resultater') { renderResultater(innhold, data); return; }
   var kamper = data && data.kamper ? data.kamper : [];
   if (!kamper.length) {
-    innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen kamper tilgjengelig</div>';
+    innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen kamper tilgjengelig' + liveKildeInfo(data, 'o=1') + '</div>';
     return;
   }
 
