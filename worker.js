@@ -6,6 +6,10 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Parameternavn som velger spillested hos cup2000 (ukjent, finnes ved å prøve kandidater; huskes per isolate).
+const STED_KANDIDATER = ['l', 's', 'v', 'h', 'sp', 'ps', 'loc', 'location', 'venue', 'sted', 'hal', 'hall', 'pl', 'place'];
+let STED_PARAM;
+
 let cachedCtx = null;
 let ctxExpiry = 0;
 
@@ -707,107 +711,146 @@ async function handleRequest(request, env) {
         return raa.map(c => c.split(';')[0].trim()).filter(c => c.includes('=')).join('; ');
       } catch (e) { return ''; }
     };
-    const hentLive = async (id, q, cookie) => {
+    const dekod = t => String(t || '').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&');
+    // extra = f.eks. "&l=1" for å velge spillested. Svar: { kamper, stedIdx, steder, valgt, struktur } eller null.
+    const hentLive = async (id, q, cookie, extra = '') => {
       try {
-        const r = await fetch(`${BASE2}?tournamentid=${id}&${q}`, { headers: cookie ? { ...UA2, Cookie: cookie } : UA2 });
+        const r = await fetch(`${BASE2}?tournamentid=${id}&${q}${extra}`, { headers: cookie ? { ...UA2, Cookie: cookie } : UA2 });
         const j = await r.json();
         const data = Array.isArray(j.data) ? j.data : [];
-        // data[3][1] = [[indeks, "Sandslihallen Søndag frem til 14:00 (...)"]] = valgt spillested
-        const valgt = Array.isArray(data[3]) && Array.isArray(data[3][1]) && Array.isArray(data[3][1][0]) ? String(data[3][1][0][1] || '') : '';
+        // data[3][1] = [[indeks, "Sandslihallen Søndag frem til 14:00 (...)"]] = valgt spillested; data[6] = alle spillesteder
+        const v = Array.isArray(data[3]) && Array.isArray(data[3][1]) && Array.isArray(data[3][1][0]) ? data[3][1][0] : null;
+        const steder = Array.isArray(data[6]) ? data[6].filter(x => Array.isArray(x) && typeof x[1] === 'string').map(x => [x[0], dekod(x[1])]) : [];
         const kamper = [];
         if (Array.isArray(data[3])) {
           const d3 = data[3];
           if (erKamp(d3[0])) finnKamper([d3], 0, kamper, 0); else finnKamper(d3, 0, kamper, 0);
         }
         if (!kamper.length) finnKamper(data, 0, kamper, 1);
-        return { kamper, valgt: valgt.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))), struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
+        return { kamper, stedIdx: v ? v[0] : null, valgt: v ? dekod(v[1]) : '', steder,
+          struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
       } catch (e) { return null; }
     };
+
+    // cup2000-siden velger spillested ut fra dato/tid i nettleseren; uten valg gir tjenesten første spillested.
+    // Navnet på parameteren er ukjent, så prøv kandidater og husk den første som faktisk bytter spillested.
+    const finnStedParam = async (id, cookie, steder, naaIdx) => {
+      if (STED_PARAM !== undefined) return STED_PARAM;
+      const maal = (steder.find(x => x[0] !== naaIdx) || [1])[0];
+      const svar = await Promise.all(STED_KANDIDATER.map(k => hentLive(id, 'lr=1', cookie, `&${k}=${maal}`)));
+      const i = svar.findIndex(r => r && r.stedIdx === maal);
+      STED_PARAM = i >= 0 ? STED_KANDIDATER[i] : null;
+      return STED_PARAM;
+    };
+
     const sesjoner = await Promise.all(ider.map(hentSesjon));
-    const perId = await Promise.all(ider.map((id, i) => Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i])))));
+    // Per ID: hent standard (for spillestedlisten), og hvis flere spillesteder: hent alle med valgt parameter.
+    const enheter = [];  // { id, idIdx, sted, res: [o, w, lr] }
+    const stedInfo = {}; // id -> { param, steder }
+    await Promise.all(ider.map(async (id, i) => {
+      const std = await Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i])));
+      const steder = (std.find(x => x && x.steder.length) || { steder: [] }).steder;
+      const naaIdx = (std.find(x => x && x.stedIdx !== null) || {}).stedIdx;
+      const param = steder.length > 1 ? await finnStedParam(id, sesjoner[i], steder, naaIdx) : null;
+      stedInfo[id] = { param, steder, standard: (std.find(x => x && x.valgt) || {}).valgt || '' };
+      if (!param) { enheter.push({ id, idIdx: i, sted: '', res: std }); return; }
+      const perSted = await Promise.all(steder.map(([idx]) =>
+        Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i], `&${param}=${idx}`)))));
+      steder.forEach(([, navn], si) => enheter.push({ id, idIdx: i, sted: navn.replace(/\s*\(.*\)\s*$/, ''), res: perSted[si] }));
+    }));
+    enheter.sort((a, b) => a.idIdx - b.idIdx);
 
-    const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
-    function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
-    function decEnt2(s) { return s.replace(/&#(\d+);/g, (_,n) => String.fromCharCode(Number(n))); }
+    const DISC_MAP2 = [['herresingle','HS'],['damesingle','DS'],['herredouble','HD'],['damedouble','DD'],['mixed','MD']];
+    function discCode2(name) { const n = name.toLowerCase(); for (const [k,v] of DISC_MAP2) if (n.includes(k)) return v; return ''; }
+    function decEnt2(s) { return s.replace(/&#(\d+);/g, (_,n) => String.fromCharCode(Number(n))); }
+
+    const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
+    const osloNaa = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
+    const idagOslo = String(osloNaa.getDate()).padStart(2, '0') + '-' + String(osloNaa.getMonth() + 1).padStart(2, '0');
+
+    // match[0] er kampnummer (ikke bane). Ekte bane står kun i match[3] for kamper i gang.
+    function parseKamp(match) {
+      const sp1raw = Array.isArray(match[6]) ? match[6] : [];
+      const sp2raw = Array.isArray(match[7]) ? match[7] : [];
+      const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+      const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
+      const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
+      const mine = navnDeler.length >= 2
+        ? allNames.some(n => navnDeler.every(del => n.includes(del)))
+        : allNames.some(n => n.includes(navnDeler[0] || ''));
+      const discFull = decEnt2(String(match[4] || ''));
+      const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
+      // Tid: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
+      const raaTid = String(match[2] || '').trim();
+      const klM = raaTid.match(/(\d{1,2})[:.](\d{2})/);
+      const datoM = raaTid.match(/(\d{1,2})-(\d{1,2})(?:-\d{2,4})?/);
+      const kl = klM ? klM[1].padStart(2, '0') + ':' + klM[2] : '';
+      const dato = datoM ? datoM[1].padStart(2, '0') + '-' + datoM[2].padStart(2, '0') : idagOslo;
+      const tid = kl ? dato + ' ' + kl : raaTid;
+      return {
+        kampnr: String(match[0] || ''),
+        tid,
+        disc: discCode2(discFull),
+        discFull,
+        ageGroup: ageGroupM ? ageGroupM[0].toUpperCase() : '',
+        spiller1, spiller2, mine
+      };
+    }
+
+    const kamper2 = [];
+    const resultater = [];
+
+    const kilder = [];
+
+    const seddePerId = {};
+    ider.forEach(id => { seddePerId[id] = { live: new Set(), res: new Set() }; });
 
-    const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
-    const osloNaa = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
-    const idagOslo = String(osloNaa.getDate()).padStart(2, '0') + '-' + String(osloNaa.getMonth() + 1).padStart(2, '0');
-
-    // match[0] er kampnummer (ikke bane). Ekte bane står kun i match[3] for kamper i gang.
-    function parseKamp(match) {
-      const sp1raw = Array.isArray(match[6]) ? match[6] : [];
-      const sp2raw = Array.isArray(match[7]) ? match[7] : [];
-      const spiller1 = sp1raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
-      const spiller2 = sp2raw.map(n => { const dn = decEnt2(String(n)); return { navn: dn.split(',')[0].trim(), klubb: (dn.split(',')[1]||'').trim() }; });
-      const allNames = [...spiller1, ...spiller2].map(s => s.navn.toLowerCase());
-      const mine = navnDeler.length >= 2
-        ? allNames.some(n => navnDeler.every(del => n.includes(del)))
-        : allNames.some(n => n.includes(navnDeler[0] || ''));
-      const discFull = decEnt2(String(match[4] || ''));
-      const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
-      // Tid: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
-      const raaTid = String(match[2] || '').trim();
-      const klM = raaTid.match(/(\d{1,2})[:.](\d{2})/);
-      const datoM = raaTid.match(/(\d{1,2})-(\d{1,2})(?:-\d{2,4})?/);
-      const kl = klM ? klM[1].padStart(2, '0') + ':' + klM[2] : '';
-      const dato = datoM ? datoM[1].padStart(2, '0') + '-' + datoM[2].padStart(2, '0') : idagOslo;
-      const tid = kl ? dato + ' ' + kl : raaTid;
-      return {
-        kampnr: String(match[0] || ''),
-        tid,
-        disc: discCode2(discFull),
-        discFull,
-        ageGroup: ageGroupM ? ageGroupM[0].toUpperCase() : '',
-        spiller1, spiller2, mine
-      };
-    }
-
-    const kamper2 = [];
-    const resultater = [];
-
-    const kilder = [];
-
-    ider.forEach((id, idx) => {
-      const [raaIgang, raaKoe, raaSiste] = perId[idx].map(x => (x && x.kamper) || []);
+    enheter.forEach(({ id, sted, res }) => {
+      const [raaIgang, raaKoe, raaSiste] = res.map(x => (x && x.kamper) || []);
       const alle = [...raaIgang, ...raaKoe, ...raaSiste];
-      const flereGrupper = new Set(alle.filter(x => x.match.length).map(x => x.gruppe)).size > 1;
-      const hallFor = gi => [hallNavn[id], flereGrupper ? 'Hall ' + (gi + 1) : ''].filter(Boolean).join(' ');
-      const valgt = (perId[idx].find(x => x && x.valgt) || {}).valgt || '';
-      kilder.push({ id, hall: hallNavn[id] || '', igang: raaIgang.length, neste: raaKoe.length, resultater: raaSiste.length,
-        sesjon: !!sesjoner[idx], valgt,
-        feil: perId[idx].some(x => x === null), struktur: perId[idx].map(x => x ? x.struktur : 'feil').join(' | ') });
-      const seddeKampnr = new Set();
+      const flereGrupper = new Set(alle.map(x => x.gruppe)).size > 1;
+      const hallFor = gi => [hallNavn[id], sted, flereGrupper ? 'Hall ' + (gi + 1) : ''].filter(Boolean).join(' · ');
+      const seddeKampnr = seddePerId[id].live, seddeRes = seddePerId[id].res;
 
       for (const { gruppe, match } of raaIgang) {
-        const hall = hallFor(gruppe);
         const k = parseKamp(match);
+        if (seddeKampnr.has(k.kampnr)) continue;
         // match[3] = "Startet bane 4 11:26"
         const baneM = decEnt2(String(match[3] || '')).match(/bane\s+(\S+)\s+(\d{1,2}:\d{2})/i);
-        kamper2.push({ ...k, hall, status: 'live', bane: baneM ? baneM[1] : '', startet: baneM ? baneM[2] : '' });
+        kamper2.push({ ...k, hall: hallFor(gruppe), status: 'live', bane: baneM ? baneM[1] : '', startet: baneM ? baneM[2] : '' });
         seddeKampnr.add(k.kampnr);
       }
-
       for (const { gruppe, match } of raaKoe) {
-        const hall = hallFor(gruppe);
         const k = parseKamp(match);
         if (seddeKampnr.has(k.kampnr)) continue;
         // match[3] = "NÆSTE KAMP" eller "Antal kampe før: N"
         const statusRaw = decEnt2(String(match[3] || '')).trim();
         const foerM = statusRaw.match(/(\d+)/);
         const status = statusRaw.toUpperCase() === 'NÆSTE KAMP' ? 'next' : (foerM ? parseInt(foerM[1]) : 'next');
-        kamper2.push({ ...k, hall, status, bane: '', startet: '' });
+        kamper2.push({ ...k, hall: hallFor(gruppe), status, bane: '', startet: '' });
         seddeKampnr.add(k.kampnr);
       }
-
       // match[3] = score "12/15 8/15" (sp1/sp2 per sett), match[5] = vinner (1/2)
       for (const { gruppe, match } of raaSiste) {
-        const hall = hallFor(gruppe);
         const k = parseKamp(match);
+        if (seddeRes.has(k.kampnr)) continue;
+        seddeRes.add(k.kampnr);
         const sett = String(match[3] || '').trim().split(/\s+/).filter(Boolean).map(s => s.replace('/', '-'));
         const vinner = match[5] === 1 || match[5] === 2 ? match[5] : 0;
-        resultater.push({ ...k, hall, sett, vinner });
+        resultater.push({ ...k, hall: hallFor(gruppe), sett, vinner });
       }
+    });
+
+    ider.forEach(id => {
+      const mine = enheter.filter(e => e.id === id);
+      const tell = i => mine.reduce((sum, e) => sum + ((e.res[i] && e.res[i].kamper.length) || 0), 0);
+      const si = stedInfo[id] || {};
+      kilder.push({ id, hall: hallNavn[id] || '', igang: tell(0), neste: tell(1), resultater: tell(2),
+        sesjon: !!sesjoner[ider.indexOf(id)],
+        valgt: si.param ? si.steder.length + ' spillesteder (parameter «' + si.param + '»)'
+          : si.steder && si.steder.length > 1 ? si.standard + ' – fant ikke hvordan spillested velges' : si.standard,
+        feil: mine.some(e => e.res.some(x => x === null)),
+        struktur: mine.map(e => e.res.map(x => x ? x.struktur : 'feil').join(' | ')).join(' || ') });
     });
 
     // Resultater fra flere haller flettes nyeste først. tid = "DD-MM HH:MM".
