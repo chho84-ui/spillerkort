@@ -6,11 +6,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Parameternavn som velger spillested hos cup2000 (ukjent, finnes ved å prøve kandidater; huskes per isolate).
-// 'p' først: cup2000-siden abonnerer på live-grupper «ID-P-0», «ID-P-1» (P = place/spillested).
-const STED_KANDIDATER = ['per', 'period', 'pe', 'hp', 'pi', 'vp', 'p', 'l', 's', 'v', 'h', 'pid', 'placeid', 'lid', 'sid', 'hid', 'sp', 'ps', 'loc', 'location', 'venue', 'sted', 'hal', 'hall', 'pl', 'place'];
-let STED_PARAM;
-
 let cachedCtx = null;
 let ctxExpiry = 0;
 
@@ -764,6 +759,8 @@ async function handleRequest(request, env) {
         // data[6] = alle spillesteder [[indeks, navn], ...]; data[5] = indeks for valgt spillested.
         // (data[3][1] = [[1, navn]] har navnet, men tallet der er ikke spillestedsindeksen.)
         const steder = Array.isArray(data[6]) ? data[6].filter(x => Array.isArray(x) && typeof x[1] === 'string').map(x => [x[0], dekod(x[1])]) : [];
+        // data[8] = datoer [["20262709", "27-09-2026"], ...] (verdi til parameteren dt)
+        const datoer = Array.isArray(data[8]) ? data[8].filter(x => Array.isArray(x) && x.length >= 2).map(x => [String(x[0]), String(x[1])]) : [];
         const d31 = Array.isArray(data[3]) && Array.isArray(data[3][1]) && Array.isArray(data[3][1][0]) ? dekod(data[3][1][0][1]) : '';
         const stedIdx = typeof data[5] === 'number' && steder.some(x => x[0] === data[5]) ? data[5] : null;
         const valgt = stedIdx !== null ? steder.find(x => x[0] === stedIdx)[1] : d31;
@@ -773,21 +770,16 @@ async function handleRequest(request, env) {
           if (erKamp(d3[0])) finnKamper([d3], 0, kamper, 0); else finnKamper(d3, 0, kamper, 0);
         }
         if (!kamper.length) finnKamper(data, 0, kamper, 1);
-        return { kamper, stedIdx, valgt, steder,
+        return { kamper, stedIdx, valgt, steder, datoer,
           struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
       } catch (e) { return null; }
     };
 
-    // cup2000-siden velger spillested ut fra dato/tid i nettleseren; uten valg gir tjenesten første spillested.
-    // Navnet på parameteren er ukjent, så prøv kandidater og husk den første som faktisk bytter spillested.
-    const finnStedParam = async (id, cookie, steder, naaIdx) => {
-      if (STED_PARAM !== undefined) return STED_PARAM;
-      const maal = (steder.find(x => x[0] !== naaIdx) || [1])[0];
-      const svar = await Promise.all(STED_KANDIDATER.map(k => hentLive(id, 'lr=1', cookie, `&${k}=${maal}`)));
-      const i = svar.findIndex(r => r && r.stedIdx === maal);
-      STED_PARAM = i >= 0 ? STED_KANDIDATER[i] : null;
-      return STED_PARAM;
-    };
+    // Fra cup2000s SearchTournaments.js (RenderVenueMatches): data[5]/[6] = valgt/alle spillesteder (parameter vi),
+    // data[7]/[8] = valgt/alle datoer (parameter dt), data[1]/[2] = periode (parameter pi, -1 = alle).
+    // Nettleseren velger spillested og dato selv; uten dem gir tjenesten første spillested (f.eks. gårsdagens).
+    const osloDag = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
+    const idagFull = String(osloDag.getDate()).padStart(2, '0') + '-' + String(osloDag.getMonth() + 1).padStart(2, '0') + '-' + osloDag.getFullYear();
 
     const sesjoner = await Promise.all(ider.map(hentSesjon));
     // Per ID: hent standard (for spillestedlisten), og hvis flere spillesteder: hent alle med valgt parameter.
@@ -796,12 +788,13 @@ async function handleRequest(request, env) {
     await Promise.all(ider.map(async (id, i) => {
       const std = await Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i])));
       const steder = (std.find(x => x && x.steder.length) || { steder: [] }).steder;
-      const naaIdx = (std.find(x => x && x.stedIdx !== null) || {}).stedIdx;
-      const param = steder.length > 1 ? await finnStedParam(id, sesjoner[i], steder, naaIdx) : null;
-      stedInfo[id] = { param, steder, standard: (std.find(x => x && x.valgt) || {}).valgt || '' };
-      if (!param) { enheter.push({ id, idIdx: i, sted: '', res: std }); return; }
+      const datoer = (std.find(x => x && x.datoer.length) || { datoer: [] }).datoer;
+      const idag = datoer.find(d => d[1] === idagFull);
+      const dt = idag ? '&dt=' + encodeURIComponent(idag[0]) : '';
+      stedInfo[id] = { steder, dato: idag ? idag[1] : '', standard: (std.find(x => x && x.valgt) || {}).valgt || '' };
+      if (steder.length < 2) { enheter.push({ id, idIdx: i, sted: '', res: std }); return; }
       const perSted = await Promise.all(steder.map(([idx]) =>
-        Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i], `&${param}=${idx}`)))));
+        Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i], `&vi=${idx}${dt}&pi=-1`)))));
       steder.forEach(([, navn], si) => enheter.push({ id, idIdx: i, sted: navn.replace(/\s*\(.*\)\s*$/, ''), res: perSted[si] }));
     }));
     enheter.sort((a, b) => a.idIdx - b.idIdx);
@@ -893,8 +886,7 @@ async function handleRequest(request, env) {
       const si = stedInfo[id] || {};
       kilder.push({ id, hall: hallNavn[id] || '', igang: tell(0), neste: tell(1), resultater: tell(2),
         sesjon: !!sesjoner[ider.indexOf(id)],
-        valgt: si.param ? si.steder.length + ' spillesteder (parameter «' + si.param + '»)'
-          : si.steder && si.steder.length > 1 ? si.standard + ' – fant ikke hvordan spillested velges' : si.standard,
+        valgt: si.steder && si.steder.length > 1 ? si.steder.length + ' spillesteder' + (si.dato ? ', ' + si.dato : '') : si.standard,
         feil: mine.some(e => e.res.some(x => x === null)),
         struktur: mine.map(e => e.res.map(x => x ? x.struktur : 'feil').join(' | ')).join(' || ') });
     });
