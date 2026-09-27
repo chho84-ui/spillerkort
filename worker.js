@@ -655,7 +655,7 @@ async function handleRequest(request, env) {
     let ider = Array.isArray(body.cup2000Ider) ? body.cup2000Ider.map(String).filter(x => /^\d+$/.test(x)) : [];
     ider = [...new Set(ider)].slice(0, 4);
     if (!ider.length) { const id = await finnCup2000Id(body); if (id) ider = [id]; }
-    if (!ider.length) return json({ kamper: [], resultater: [] });
+    if (!ider.length) return json({ kamper: [], resultater: [], kilder: [], ikkeFunnet: true });
 
     const BASE2 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA2 = { 'User-Agent': 'Mozilla/5.0' };
@@ -682,12 +682,19 @@ async function handleRequest(request, env) {
     // To kilder: o=1 = "Kampe i gang" (pågående, har banenummer), w=1 = "Næste kampe" (kø, uten bane).
     // En kamp som nettopp er satt i gang ligger i begge, så o=1 har forrang ved dedupe på kampnr.
     // lr=1 = "Seneste resultater", nyeste først.
+    // data[3] er en liste av kamplister – trolig én per spillested/hall. Tidligere ble bare data[3][0]
+    // lest, så kamper i hall 2 forsvant. Svar: [{ gruppe, match }], eller null hvis kallet feilet.
     const hentLive = async (id, q) => {
       try {
         const r = await fetch(`${BASE2}?tournamentid=${id}&${q}`, { headers: UA2 });
         const j = await r.json();
-        return Array.isArray(j.data) && Array.isArray(j.data[3]) && Array.isArray(j.data[3][0]) ? j.data[3][0] : [];
-      } catch (e) { return []; }
+        const d3 = Array.isArray(j.data) && Array.isArray(j.data[3]) ? j.data[3] : [];
+        const erKamp = x => Array.isArray(x) && x.length > 7 && !Array.isArray(x[0]);
+        const grupper = d3.length && erKamp(d3[0]) ? [d3] : d3.filter(Array.isArray);
+        const ut = [];
+        grupper.forEach((g, gi) => g.forEach(m => { if (erKamp(m)) ut.push({ gruppe: gi, match: m }); }));
+        return ut;
+      } catch (e) { return null; }
     };
     const perId = await Promise.all(ider.map(id => Promise.all([hentLive(id, 'o=1'), hentLive(id, 'w=1'), hentLive(id, 'lr=1')])));
 
@@ -725,13 +732,19 @@ async function handleRequest(request, env) {
     const kamper2 = [];
     const resultater = [];
 
+    const kilder = [];
+
     ider.forEach((id, idx) => {
-      const [raaIgang, raaKoe, raaSiste] = perId[idx];
-      const hall = hallNavn[id] || '';
+      const [raaIgang, raaKoe, raaSiste] = perId[idx].map(x => x || []);
+      const alle = [...raaIgang, ...raaKoe, ...raaSiste];
+      const flereGrupper = new Set(alle.filter(x => x.match.length).map(x => x.gruppe)).size > 1;
+      const hallFor = gi => [hallNavn[id], flereGrupper ? 'Hall ' + (gi + 1) : ''].filter(Boolean).join(' ');
+      kilder.push({ id, hall: hallNavn[id] || '', igang: raaIgang.length, neste: raaKoe.length, resultater: raaSiste.length,
+        feil: perId[idx].some(x => x === null) });
       const seddeKampnr = new Set();
 
-      for (const match of raaIgang) {
-        if (!Array.isArray(match)) continue;
+      for (const { gruppe, match } of raaIgang) {
+        const hall = hallFor(gruppe);
         const k = parseKamp(match);
         // match[3] = "Startet bane 4 11:26"
         const baneM = decEnt2(String(match[3] || '')).match(/bane\s+(\S+)\s+(\d{1,2}:\d{2})/i);
@@ -739,8 +752,8 @@ async function handleRequest(request, env) {
         seddeKampnr.add(k.kampnr);
       }
 
-      for (const match of raaKoe) {
-        if (!Array.isArray(match)) continue;
+      for (const { gruppe, match } of raaKoe) {
+        const hall = hallFor(gruppe);
         const k = parseKamp(match);
         if (seddeKampnr.has(k.kampnr)) continue;
         // match[3] = "NÆSTE KAMP" eller "Antal kampe før: N"
@@ -752,8 +765,8 @@ async function handleRequest(request, env) {
       }
 
       // match[3] = score "12/15 8/15" (sp1/sp2 per sett), match[5] = vinner (1/2)
-      for (const match of raaSiste) {
-        if (!Array.isArray(match)) continue;
+      for (const { gruppe, match } of raaSiste) {
+        const hall = hallFor(gruppe);
         const k = parseKamp(match);
         const sett = String(match[3] || '').trim().split(/\s+/).filter(Boolean).map(s => s.replace('/', '-'));
         const vinner = match[5] === 1 || match[5] === 2 ? match[5] : 0;
@@ -765,7 +778,7 @@ async function handleRequest(request, env) {
     const tidNokkel = t => { const m = String(t || '').match(/(\d{2})-(\d{2})\s+(\d{2}:\d{2})/); return m ? m[2] + m[1] + m[3] : ''; };
     resultater.sort((a, b) => tidNokkel(b.tid).localeCompare(tidNokkel(a.tid)));
 
-    return json({ kamper: kamper2, resultater: resultater.slice(0, 40) });
+    return json({ kamper: kamper2, resultater: resultater.slice(0, 40), kilder });
   }
 
   if (path === '/stats') {

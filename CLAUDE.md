@@ -100,7 +100,9 @@ To separate endepunkt – `/cup2000live` henter begge parallelt og dedupliserer 
   `"Antal kampe før: N"` – aldri tom. Pågående kamper ligger **ikke** her.
 - `?tournamentid=ID&o=1` → **"Kampe i gang"** (renderMethod=8). Kun kamper som er satt i gang.
 
-Begge: `data[3][0]` = flat liste av kamper.
+Begge: `data[3]` = liste av kamplister, trolig én per spillested/hall. **Les alle**, ikke bare `data[3][0]`, ellers forsvinner
+  kamper i hall 2. `/cup2000live` tåler også at `data[3]` selv er kamplisten, og merker «Hall N» når flere lister har kamper.
+  Svaret har `kilder: [{ id, hall, igang, neste, resultater, feil }]`, som appen viser når panelet er tomt.
 Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [sp2names...], sp1idx, sp2idx, ...]`
 - `match[0]` = **kampnummer, ikke bane**
 - `match[3]` = køstatus (w=1) eller `"Startet bane 4 11:26"` (o=1) – eneste sted ekte bane finnes
