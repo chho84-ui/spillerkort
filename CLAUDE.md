@@ -181,6 +181,9 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 - **`g=-1` virker ikke** – sluttspill hentes med `p=1` uten `g`-parameter
 - **doubles/mix standings** – `s[5]` har flere navn, ikke bare `s[5][0]`
 - **sluttspill runder** – kamper ligger i `runde[1][0]`, ikke `runde[1]`
+- **Flere spillesteder i én cup2000-turnering** (f.eks. «lørdag», «søndag før 14», «søndag etter 14», se `data[6]`) – cup2000 husker valgt
+  spillested i sesjonen. Uten cookie gir `o=1` `data[3] = null` og `lr=1` første spillested (gårsdagens resultater). `/cup2000live`
+  henter derfor turneringssiden først og sender med cookien. Valgt spillested står i `data[3][1]`.
 - **Turnering delt på flere haller** – hver hall er en egen cup2000-turnering. ID-ene hentes fra klassenes cup2000-lenker hos badmintonportalen (`t.cup2000Ider`); navneoppslaget finner bare én
 - **git push avvises** – GitHub har nye commits fra API-deploy; bruk alltid `git pull --rebase origin main` før push
 - **wrangler `--account-id`** – virker ikke, bruk env var `CLOUDFLARE_ACCOUNT_ID` i stedet
