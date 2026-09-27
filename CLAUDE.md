@@ -57,7 +57,7 @@ git push
 | `/api` | Proxy til badmintonportalen AJAX-webservice |
 | `/app` | Proxy til badmintonportalen App.aspx |
 | `/cup2000` | Henter kampprogram + gruppestandings + sluttspill fra cup2000.dk |
-| `/cup2000live` | Henter alle kommende/pågående kamper (alle baner) + siste resultater fra cup2000.dk |
+| `/cup2000live` | Henter alle kommende/pågående kamper (alle baner) + siste resultater fra cup2000.dk. Tar `cup2000Ider` (én per hall hvis turneringen er delt) og fletter dem med `hall` på hver kamp; uten ID-er brukes navneoppslag |
 | `/varsle` | Lagrer e-postvarsel i KV-store (VARSLER) |
 | `/debug` | Sjekker badmintonportalen session-token |
 
@@ -179,6 +179,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 - **`g=-1` virker ikke** – sluttspill hentes med `p=1` uten `g`-parameter
 - **doubles/mix standings** – `s[5]` har flere navn, ikke bare `s[5][0]`
 - **sluttspill runder** – kamper ligger i `runde[1][0]`, ikke `runde[1]`
+- **Turnering delt på flere haller** – hver hall er en egen cup2000-turnering. ID-ene hentes fra klassenes cup2000-lenker hos badmintonportalen (`t.cup2000Ider`); navneoppslaget finner bare én
 - **git push avvises** – GitHub har nye commits fra API-deploy; bruk alltid `git pull --rebase origin main` før push
 - **wrangler `--account-id`** – virker ikke, bruk env var `CLOUDFLARE_ACCOUNT_ID` i stedet
 
