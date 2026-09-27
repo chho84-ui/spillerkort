@@ -1500,13 +1500,17 @@ function liveKildeInfo(data, visning) {
   if (data.ikkeFunnet) return '<div class="sk-live-kilde">Fant ikke turneringen hos cup2000</div>';
   return (data.kilder || []).map(function(k) {
     var url = 'https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=' + encodeURIComponent(k.id) + '&' + visning;
+    var raa = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx?tournamentid=' + encodeURIComponent(k.id) + '&' + visning;
     return '<div class="sk-live-kilde">cup2000 #' + esc(k.id) + (k.hall ? ' (' + esc(k.hall) + ')' : '') + ': '
       + k.igang + ' i gang, ' + k.neste + ' neste, ' + k.resultater + ' resultater' + (k.feil ? ', feil ved henting' : '')
-      + ' · <a href="' + url + '" target="_blank" rel="noopener">åpne</a></div>';
+      + ' · <a href="' + url + '" target="_blank" rel="noopener">åpne</a> · <a href="' + raa + '" target="_blank" rel="noopener">rådata</a>'
+      + (k.struktur ? '<br><span style="opacity:.6">' + esc(k.struktur) + '</span>' : '') + '</div>';
   }).join('');
 }
 
 function renderResultater(innhold, data) {
+  var naa = new Date();
+  var idag = String(naa.getDate()).padStart(2, '0') + '-' + String(naa.getMonth() + 1).padStart(2, '0');
   var res = data && data.resultater ? data.resultater : [];
   if (!res.length) {
     innhold.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen resultater ennå' + liveKildeInfo(data, 'lr=1') + '</div>';
@@ -1520,14 +1524,14 @@ function renderResultater(innhold, data) {
     html += '<div class="sk-live-kamp' + (k.mine ? ' sk-live-kamp-mine' : '') + '">'
       + '<div class="sk-live-kamp-top">'
       + '<span class="sk-live-disc">' + esc(k.discFull || ((k.disc || '') + ' ' + (k.ageGroup || ''))) + (k.hall ? ' · ' + esc(k.hall) : '') + '</span>'
-      + '<span class="sk-live-tid">' + esc(tid.length > 1 ? tid[1] : tid[0]) + '</span>'
+      + '<span class="sk-live-tid">' + esc(tid.length > 1 && tid[0] !== idag ? tid[0] + ' ' + tid[1] : tid[tid.length - 1]) + '</span>'
       + '</div>'
       + '<div class="sk-live-sp' + (k.vinner === 1 ? ' sk-res-vinner' : '') + '">' + navn(k.spiller1) + '</div>'
       + '<div class="sk-live-sp' + (k.vinner === 2 ? ' sk-res-vinner' : '') + '">' + navn(k.spiller2) + '</div>'
       + '<div class="sk-res-sett">' + esc((k.sett || []).join(', ')) + '</div>'
       + '</div>';
   }
-  innhold.innerHTML = html;
+  innhold.innerHTML = html + liveKildeInfo(data, 'lr=1');
 }
 
 function renderLiveInnhold(data) {
@@ -1589,7 +1593,7 @@ function renderLiveInnhold(data) {
     html += '<div class="sk-live-seksjon">Neste kamper</div>';
     for (var j = 0; j < koe.length; j++) html += kampKort(koe[j], '');
   }
-  innhold.innerHTML = html;
+  innhold.innerHTML = html + liveKildeInfo(data, 'o=1');
 }
 
 function oppdaterLive(tournamentNavn) {

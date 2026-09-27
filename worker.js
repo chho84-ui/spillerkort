@@ -682,18 +682,31 @@ async function handleRequest(request, env) {
     // To kilder: o=1 = "Kampe i gang" (pågående, har banenummer), w=1 = "Næste kampe" (kø, uten bane).
     // En kamp som nettopp er satt i gang ligger i begge, så o=1 har forrang ved dedupe på kampnr.
     // lr=1 = "Seneste resultater", nyeste først.
-    // data[3] er en liste av kamplister – trolig én per spillested/hall. Tidligere ble bare data[3][0]
-    // lest, så kamper i hall 2 forsvant. Svar: [{ gruppe, match }], eller null hvis kallet feilet.
+    // Kampene ligger normalt i data[3] som én liste per spillested/hall, men formen varierer (flat liste,
+    // flere haller, flere dager). Let derfor rekursivt etter alt som ser ut som en kamp: tid i [2] og
+    // spillerlister i [6]/[7]. Gruppe = indeks øverst i data[3] (≈ hall). Svar: { kamper, struktur }, null ved feil.
+    const erKamp = x => Array.isArray(x) && x.length >= 8 && !Array.isArray(x[0])
+      && Array.isArray(x[6]) && Array.isArray(x[7]) && /\d{1,2}[:.]\d{2}/.test(String(x[2] || ''));
+    const finnKamper = (node, gruppe, ut, dybde) => {
+      if (!Array.isArray(node) || dybde > 8) return;
+      if (erKamp(node)) { ut.push({ gruppe, match: node }); return; }
+      node.forEach((barn, i) => finnKamper(barn, dybde === 0 ? i : gruppe, ut, dybde + 1));
+    };
+    const beskriv = d => Array.isArray(d)
+      ? '[' + d.map(x => Array.isArray(x) ? 'a' + x.length : x === null ? 'n' : typeof x === 'string' ? 's' : typeof x[0] || typeof x).join(',') + ']'
+      : typeof d;
     const hentLive = async (id, q) => {
       try {
         const r = await fetch(`${BASE2}?tournamentid=${id}&${q}`, { headers: UA2 });
         const j = await r.json();
-        const d3 = Array.isArray(j.data) && Array.isArray(j.data[3]) ? j.data[3] : [];
-        const erKamp = x => Array.isArray(x) && x.length > 7 && !Array.isArray(x[0]);
-        const grupper = d3.length && erKamp(d3[0]) ? [d3] : d3.filter(Array.isArray);
-        const ut = [];
-        grupper.forEach((g, gi) => g.forEach(m => { if (erKamp(m)) ut.push({ gruppe: gi, match: m }); }));
-        return ut;
+        const data = Array.isArray(j.data) ? j.data : [];
+        const kamper = [];
+        if (Array.isArray(data[3])) {
+          const d3 = data[3];
+          if (erKamp(d3[0])) finnKamper([d3], 0, kamper, 0); else finnKamper(d3, 0, kamper, 0);
+        }
+        if (!kamper.length) finnKamper(data, 0, kamper, 1);
+        return { kamper, struktur: 'rm' + j.renderMethod + ' data' + beskriv(data) + (Array.isArray(data[3]) ? ' d3' + beskriv(data[3]) : '') };
       } catch (e) { return null; }
     };
     const perId = await Promise.all(ider.map(id => Promise.all([hentLive(id, 'o=1'), hentLive(id, 'w=1'), hentLive(id, 'lr=1')])));
@@ -703,6 +716,8 @@ async function handleRequest(request, env) {
     function decEnt2(s) { return s.replace(/&#(\d+);/g, (_,n) => String.fromCharCode(Number(n))); }
 
     const navnDeler = (body.navn || '').toLowerCase().split(' ').filter(Boolean);
+    const osloNaa = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
+    const idagOslo = String(osloNaa.getDate()).padStart(2, '0') + '-' + String(osloNaa.getMonth() + 1).padStart(2, '0');
 
     // match[0] er kampnummer (ikke bane). Ekte bane står kun i match[3] for kamper i gang.
     function parseKamp(match) {
@@ -717,8 +732,12 @@ async function handleRequest(request, env) {
       const discFull = decEnt2(String(match[4] || ''));
       const ageGroupM = discFull.match(/U\d+|Senior|Junior/i);
       // Tid: "HH:MM DD-MM-YYYY" → "DD-MM HH:MM"
-      const tp = String(match[2] || '').trim().split(/\s+/);
-      const tid = tp.length >= 2 && /^\d{2}:\d{2}/.test(tp[0]) ? tp[1].substring(0,5) + ' ' + tp[0].substring(0,5) : (tp[0] || '');
+      const raaTid = String(match[2] || '').trim();
+      const klM = raaTid.match(/(\d{1,2})[:.](\d{2})/);
+      const datoM = raaTid.match(/(\d{1,2})-(\d{1,2})(?:-\d{2,4})?/);
+      const kl = klM ? klM[1].padStart(2, '0') + ':' + klM[2] : '';
+      const dato = datoM ? datoM[1].padStart(2, '0') + '-' + datoM[2].padStart(2, '0') : idagOslo;
+      const tid = kl ? dato + ' ' + kl : raaTid;
       return {
         kampnr: String(match[0] || ''),
         tid,
@@ -735,12 +754,12 @@ async function handleRequest(request, env) {
     const kilder = [];
 
     ider.forEach((id, idx) => {
-      const [raaIgang, raaKoe, raaSiste] = perId[idx].map(x => x || []);
+      const [raaIgang, raaKoe, raaSiste] = perId[idx].map(x => (x && x.kamper) || []);
       const alle = [...raaIgang, ...raaKoe, ...raaSiste];
       const flereGrupper = new Set(alle.filter(x => x.match.length).map(x => x.gruppe)).size > 1;
       const hallFor = gi => [hallNavn[id], flereGrupper ? 'Hall ' + (gi + 1) : ''].filter(Boolean).join(' ');
       kilder.push({ id, hall: hallNavn[id] || '', igang: raaIgang.length, neste: raaKoe.length, resultater: raaSiste.length,
-        feil: perId[idx].some(x => x === null) });
+        feil: perId[idx].some(x => x === null), struktur: perId[idx].map(x => x ? x.struktur : 'feil').join(' | ') });
       const seddeKampnr = new Set();
 
       for (const { gruppe, match } of raaIgang) {
