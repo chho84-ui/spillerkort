@@ -6,6 +6,10 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// cup2000-oppsett per turnering (sesjonscookie, spillesteder, dagens dt) – spart i 10 min per isolate,
+// så /cup2000live bare trenger én runde med kall.
+const LIVE_OPPSETT = new Map();
+
 let cachedCtx = null;
 let ctxExpiry = 0;
 
@@ -699,6 +703,13 @@ async function handleRequest(request, env) {
     if (!ider.length) { const id = await finnCup2000Id(body); if (id) ider = [id]; }
     if (!ider.length) return json({ kamper: [], resultater: [], kilder: [], ikkeFunnet: true });
 
+    // Hele svaret caches i 15 s, så flere som ser på samme turnering deler det. ↻ i appen sender fersk: true.
+    const liveCacheKey = new Request('https://cache.goodminton.no/live?' + encodeURIComponent(JSON.stringify([ider, body.navn || ''])));
+    if (!body.fersk) {
+      const hit = await caches.default.match(liveCacheKey);
+      if (hit) return json(await hit.json());
+    }
+
     const BASE2 = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA2 = { 'User-Agent': 'Mozilla/5.0' };
 
@@ -781,20 +792,35 @@ async function handleRequest(request, env) {
     const osloDag = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Oslo' }));
     const idagFull = String(osloDag.getDate()).padStart(2, '0') + '-' + String(osloDag.getMonth() + 1).padStart(2, '0') + '-' + osloDag.getFullYear();
 
-    const sesjoner = await Promise.all(ider.map(hentSesjon));
-    // Per ID: hent standard (for spillestedlisten), og hvis flere spillesteder: hent alle med valgt parameter.
+    // Per ID: finn oppsett (sesjon, spillesteder, dagens dato) – fra minnet hvis ferskt, ellers sesjon + standardvisning.
+    // Har turneringen flere spillesteder, hentes hvert med &vi=…&dt=… (én runde når oppsettet er kjent).
+    const sesjoner = {};
     const enheter = [];  // { id, idIdx, sted, res: [o, w, lr] }
-    const stedInfo = {}; // id -> { param, steder }
+    const stedInfo = {}; // id -> { steder, dato, standard }
     await Promise.all(ider.map(async (id, i) => {
-      const std = await Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i])));
-      const steder = (std.find(x => x && x.steder.length) || { steder: [] }).steder;
-      const datoer = (std.find(x => x && x.datoer.length) || { datoer: [] }).datoer;
-      const idag = datoer.find(d => d[1] === idagFull);
-      const dt = idag ? '&dt=' + encodeURIComponent(idag[0]) : '';
-      stedInfo[id] = { steder, dato: idag ? idag[1] : '', standard: (std.find(x => x && x.valgt) || {}).valgt || '' };
-      if (steder.length < 2) { enheter.push({ id, idIdx: i, sted: '', res: std }); return; }
+      let opp = LIVE_OPPSETT.get(id);
+      if (opp && (Date.now() - opp.tid > 10 * 60 * 1000 || opp.dag !== idagFull)) opp = null;
+      let std = null;
+      if (!opp) {
+        const cookie = await hentSesjon(id);
+        std = await Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, cookie)));
+        const steder = (std.find(x => x && x.steder.length) || { steder: [] }).steder;
+        const datoer = (std.find(x => x && x.datoer.length) || { datoer: [] }).datoer;
+        const idag = datoer.find(d => d[1] === idagFull);
+        opp = { tid: Date.now(), dag: idagFull, cookie, steder, dt: idag ? '&dt=' + encodeURIComponent(idag[0]) : '',
+          dato: idag ? idag[1] : '', standard: (std.find(x => x && x.valgt) || {}).valgt || '' };
+        if (std.some(x => x)) LIVE_OPPSETT.set(id, opp);
+      }
+      sesjoner[id] = opp.cookie;
+      stedInfo[id] = { steder: opp.steder, dato: opp.dato, standard: opp.standard };
+      const steder = opp.steder;
+      if (steder.length < 2) {
+        if (!std) std = await Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, opp.cookie)));
+        enheter.push({ id, idIdx: i, sted: '', res: std });
+        return;
+      }
       const perSted = await Promise.all(steder.map(([idx]) =>
-        Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, sesjoner[i], `&vi=${idx}${dt}&pi=-1`)))));
+        Promise.all(['o=1', 'w=1', 'lr=1'].map(q => hentLive(id, q, opp.cookie, `&vi=${idx}${opp.dt}&pi=-1`)))));
       steder.forEach(([, navn], si) => enheter.push({ id, idIdx: i, sted: navn.replace(/\s*\(.*\)\s*$/, ''), res: perSted[si] }));
     }));
     enheter.sort((a, b) => a.idIdx - b.idIdx);
@@ -885,7 +911,7 @@ async function handleRequest(request, env) {
       const tell = i => mine.reduce((sum, e) => sum + ((e.res[i] && e.res[i].kamper.length) || 0), 0);
       const si = stedInfo[id] || {};
       kilder.push({ id, hall: hallNavn[id] || '', igang: tell(0), neste: tell(1), resultater: tell(2),
-        sesjon: !!sesjoner[ider.indexOf(id)],
+        sesjon: !!sesjoner[id],
         valgt: si.steder && si.steder.length > 1 ? si.steder.length + ' spillesteder' + (si.dato ? ', ' + si.dato : '') : si.standard,
         feil: mine.some(e => e.res.some(x => x === null)),
         struktur: mine.map(e => e.res.map(x => x ? x.struktur : 'feil').join(' | ')).join(' || ') });
@@ -895,7 +921,13 @@ async function handleRequest(request, env) {
     const tidNokkel = t => { const m = String(t || '').match(/(\d{2})-(\d{2})\s+(\d{2}:\d{2})/); return m ? m[2] + m[1] + m[3] : ''; };
     resultater.sort((a, b) => tidNokkel(b.tid).localeCompare(tidNokkel(a.tid)));
 
-    return json({ kamper: kamper2, resultater: resultater.slice(0, 40), kilder });
+    const svar = { kamper: kamper2, resultater: resultater.slice(0, 40), kilder };
+    if (!kilder.some(k => k.feil)) {
+      await caches.default.put(liveCacheKey, new Response(JSON.stringify(svar), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=15' }
+      }));
+    }
+    return json(svar);
   }
 
   if (path === '/stats') {

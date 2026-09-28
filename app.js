@@ -849,6 +849,8 @@ function visTurnering(t) {
     ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + escAttrJs(t.navn||'') + '\',\'live\',\'' + escAttrJs((t.cup2000Ider || []).join(',')) + '\')">📋 Live</button>'
     + '<button class="sk-live-btn" onclick="visLive(\'' + escAttrJs(t.navn||'') + '\',\'resultater\',\'' + escAttrJs((t.cup2000Ider || []).join(',')) + '\')">🏆 Resultater</button>';
   sec.innerHTML = '<div class="sk-sek-banner"><h3>' + esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
+  // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
+  if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(',')).catch(function() {});
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
@@ -1478,15 +1480,23 @@ function lukkGruppe() {
 }
 
 var LIVE_TTL = 30 * 1000; // 30 sek cache for live-data
-function cup2000LiveApi(tournamentNavn) {
-  var key = 'live:' + tournamentNavn + '|' + _liveIder;
+// ider: kommaseparerte cup2000-ID-er (standard: de til åpent panel). fersk: hopp over cache (↻).
+// Pågående henting for samme nøkkel gjenbrukes, så forhåndshenting og trykk på knappen ikke dobler kallet.
+var _liveVenter = {};
+function cup2000LiveApi(tournamentNavn, fersk, ider) {
+  ider = ider === undefined ? _liveIder : ider;
+  var key = 'live:' + tournamentNavn + '|' + ider;
   var e = _cache[key];
-  if (e && (Date.now() - e.ts < LIVE_TTL)) return Promise.resolve(e.val);
-  return fetch(PROXY + '/cup2000live', {
+  if (!fersk && e && (Date.now() - e.ts < LIVE_TTL)) return Promise.resolve(e.val);
+  if (!fersk && _liveVenter[key]) return _liveVenter[key];
+  var p = fetch(PROXY + '/cup2000live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK, cup2000Ider: _liveIder ? _liveIder.split(',') : [] })
+    body: JSON.stringify({ tournamentNavn: tournamentNavn, navn: SN, klubb: SK, cup2000Ider: ider ? ider.split(',') : [], fersk: !!fersk })
   }).then(function(r) { return r.json(); }).then(function(d) { return cacheSet(key, d); });
+  _liveVenter[key] = p;
+  p.catch(function() {}).then(function() { delete _liveVenter[key]; });
+  return p;
 }
 
 var _liveModus = 'live';
@@ -1621,12 +1631,11 @@ function renderLiveInnhold(data) {
 }
 
 function oppdaterLive(tournamentNavn) {
-  delete _cache['live:' + tournamentNavn + '|' + _liveIder];
   var btn = document.getElementById('sk-live-refresh');
   if (btn) { btn.textContent = '↻'; btn.disabled = true; }
   var innhold = document.getElementById('sk-live-innhold');
   if (innhold) innhold.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>';
-  cup2000LiveApi(tournamentNavn).then(function(data) {
+  cup2000LiveApi(tournamentNavn, true).then(function(data) {
     renderLiveInnhold(data);
     if (btn) { btn.disabled = false; }
   }).catch(function() {
