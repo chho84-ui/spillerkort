@@ -927,6 +927,9 @@ function visTurnering(t) {
           // Ingen cup2000-kamper, men turneringen er ferdig — hent resultater fra badmintonportalen
           var pastKlEl = document.getElementById('sk-kl-past-' + t.tournamentId);
           if (pastKlEl) pastKlEl.innerHTML = '<div style="font-size:11px;color:#555;text-align:center;padding:2px 0">Henter resultater...</div>';
+          var pid = String(SI);
+          // Grener spilleren er påmeldt ("Damesingle", "Mixeddouble" …); tom liste = alle grener.
+          var paameldt = (t.registreringer || []).map(function(r) { return (r.disiplin || '').toLowerCase(); });
           Promise.all(t.klasser.map(function(kl) {
             return api('SearchTournamentResults', {
               tournamentclassid: parseInt(kl.id),
@@ -935,31 +938,50 @@ function visTurnering(t) {
               var html = String((res.d && res.d.Html) || '');
               if (!html) return null;
               var doc2 = new DOMParser().parseFromString(html, 'text/html');
-              var h2s = doc2.querySelectorAll('h2');
-              var resultatBlokker = [];
-              h2s.forEach(function(h2) {
-                var table = h2.nextElementSibling;
-                while (table && table.tagName !== 'TABLE') table = table.nextElementSibling;
-                if (!table) return;
-                var rows = table.querySelectorAll('tr:not(.headrow)');
-                var sistePlass = '', sistePoeng = '';
-                rows.forEach(function(row) {
-                  var playerCell = row.querySelector('td.player');
-                  var rankCell = row.querySelector('td.rank');
-                  var pointsCell = row.querySelector('td.points');
-                  if (!playerCell) return;
-                  var rankTekst = rankCell ? rankCell.textContent.trim() : '';
-                  var poengTekst = pointsCell ? pointsCell.textContent.trim() : '';
-                  if (rankTekst) sistePlass = rankTekst;
-                  if (poengTekst) sistePoeng = poengTekst;
-                  var playerText = playerCell.textContent || '';
-                  if (playerText.toLowerCase().indexOf(SN.toLowerCase()) === -1) return;
-                  var disc = h2.textContent.trim();
-                  // For doubles: poeng kan stå på makkerens rad — bruk sistePoeng som fallback
-                  resultatBlokker.push({ disc: disc, plass: sistePlass, poeng: poengTekst || sistePoeng });
-                });
+              var blokker = [];
+              doc2.querySelectorAll('h2').forEach(function(h2) {
+                var disc = h2.textContent.trim();
+                var blokk = { disc: disc, klasse: kl.name || '', plass: '', poeng: '', eid: '' };
+                var el2 = h2.nextElementSibling;
+                while (el2 && el2.tagName !== 'TABLE' && el2.tagName !== 'H2') {
+                  var em = (el2.getAttribute && el2.getAttribute('onclick') || '').match(/SelectEvent\('\d+',\s*'(\d+)'\)/);
+                  if (em) blokk.eid = em[1];
+                  el2 = el2.nextElementSibling;
+                }
+                if (el2 && el2.tagName === 'TABLE') {
+                  var sistePlass = '', sistePoeng = '';
+                  el2.querySelectorAll('tr:not(.headrow)').forEach(function(row) {
+                    var playerCell = row.querySelector('td.player');
+                    if (!playerCell) return;
+                    var rankTekst = (row.querySelector('td.rank') || {}).textContent;
+                    var poengTekst = (row.querySelector('td.points') || {}).textContent;
+                    rankTekst = (rankTekst || '').trim(); poengTekst = (poengTekst || '').trim();
+                    // Ny rad med plass = ny spiller/par; rad uten plass = makker i samme par
+                    if (rankTekst) { sistePlass = rankTekst; sistePoeng = poengTekst; }
+                    var link = playerCell.querySelector('a[href*="VisSpiller"]');
+                    var erMeg = (link && (link.getAttribute('href') || '').indexOf('VisSpiller/#' + pid) !== -1)
+                      || (playerCell.textContent || '').toLowerCase().indexOf(SN.toLowerCase()) !== -1;
+                    if (!erMeg) return;
+                    blokk.plass = sistePlass;
+                    blokk.poeng = rankTekst ? poengTekst : sistePoeng;
+                  });
+                }
+                var discL = disc.toLowerCase();
+                var aktuell = blokk.plass || !paameldt.length || paameldt.some(function(p) { return p && (p.indexOf(discL) !== -1 || discL.indexOf(p) !== -1); });
+                if (aktuell) blokker.push(blokk);
               });
-              return resultatBlokker.length ? resultatBlokker : null;
+              // Spillerens kamper i hver aktuell gren (seier/tap), også når hun ikke fikk plassering
+              return Promise.all(blokker.map(function(b) {
+                if (!b.eid) return Promise.resolve(b);
+                return h2hKamper(kl.id, b.eid, pid).then(function(ks) {
+                  b.seire = ks.filter(function(k) { return !k.wo && k.vant; }).length;
+                  b.tap = ks.filter(function(k) { return !k.wo && !k.vant; }).length;
+                  b.kamper = ks.length;
+                  return b;
+                }).catch(function() { return b; });
+              })).then(function(bs) {
+                return bs.filter(function(b) { return b.plass || b.kamper; });
+              });
             }).catch(function() { return null; });
           })).then(function(alleResultater) {
             var el = document.getElementById('sk-kl-past-' + t.tournamentId);
@@ -970,9 +992,10 @@ function visTurnering(t) {
             var rh = '<div style="font-size:10px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Resultater</div>';
             alle.forEach(function(b) {
               rh += '<div class="sk-row">'
-                + '<span class="sk-disc">' + esc(b.disc) + '</span>'
+                + '<span class="sk-disc">' + esc(b.disc) + (b.klasse ? ' <span style="opacity:.6;font-size:11px">' + esc(b.klasse) + '</span>' : '') + '</span>'
                 + '<span style="margin-left:8px;color:#7fffd4;font-weight:bold">' + (b.plass ? '#' + esc(b.plass) : '') + '</span>'
                 + (b.poeng ? '<span style="margin-left:6px;font-size:11px;color:#aaa">' + esc(b.poeng) + 'p</span>' : '')
+                + (b.kamper ? '<span style="margin-left:auto;font-size:11px;color:#aaa">' + b.seire + '–' + b.tap + '</span>' : '')
                 + '</div>';
             });
             el.innerHTML = rh;
