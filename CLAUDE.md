@@ -156,7 +156,9 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 ### Cache-TTL:
 - Generell: 10 min (`CACHE_TTL`)
 - cup2000 kampprogram: 2 min (`CUP2000_TTL`)
-- cup2000 live: 30 sek (`LIVE_TTL`)
+- cup2000 live: 30 sek (`LIVE_TTL`). Hentes i bakgrunnen når en pågående turnering vises; pågående henting gjenbrukes.
+  I workeren: oppsett per turnering (sesjon, spillesteder, dagens `dt`) i `LIVE_OPPSETT` 10 min, hele svaret 15 s i
+  Cloudflare Cache. ↻ sender `fersk: true`.
 
 ### Turnerings-objekt (t):
 ```js
