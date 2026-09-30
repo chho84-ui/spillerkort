@@ -848,7 +848,12 @@ function visTurnering(t) {
   var liveKnappHtml = (t.isPast || !t.harStartet) ? '' :
     ' <button class="sk-live-btn" id="sk-live-btn-' + t.tournamentId + '" onclick="visLive(\'' + escAttrJs(t.navn||'') + '\',\'live\',\'' + escAttrJs((t.cup2000Ider || []).join(',')) + '\')">📋 Live</button>'
     + '<button class="sk-live-btn" onclick="visLive(\'' + escAttrJs(t.navn||'') + '\',\'resultater\',\'' + escAttrJs((t.cup2000Ider || []).join(',')) + '\')">🏆 Resultater</button>';
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering') + '</h3>' + liveKnappHtml + '</div>';
+  // Turneringssiden hos badmintonportalen (info, invitasjon, klasser) for spillerens første klasse
+  var klasseId = t.klasser && t.klasser[0] && String(t.klasser[0].id || '').replace(/\D/g, '');
+  var tittel = esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering');
+  if (klasseId) tittel = '<a class="sk-tur-lenke" href="https://badmintonportalen.no/NBF/Turnering/VisResultater/#' + klasseId + ',"'
+    + ' target="_blank" rel="noopener" title="Åpne turneringen på badmintonportalen">' + tittel + ' <span class="sk-tur-lenke-ikon">↗</span></a>';
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + liveKnappHtml + '</div>';
   // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
   if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(',')).catch(function() {});
   res.appendChild(sec);

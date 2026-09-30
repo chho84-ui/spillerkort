@@ -123,6 +123,8 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 
 - `GetPlayerProfile` med `getplayerdata: true` → seksjonen `<h2>Turneringer</h2>` lister spillerens klasser per sesong:
   `<a href='/NBF/Turnering/VisResultater/#KLASSEID,'>U15 A</a>`. Sesong-ID-er tilbake til `2002013` (2013/14).
+- Turneringsside for en klasse: `https://badmintonportalen.no/NBF/Turnering/VisResultater/#KLASSEID,` – turneringsbanneret lenker hit
+  (spillerens første klasse).
 - `SearchTournamentResults { tournamentclassid }` → sluttplassering per gren (`<h2>Herredouble</h2>`), med lenken
   `TournamentResults.SelectEvent('KLASSEID','GRENID')` («Vis alle kamper»).
 - `SearchTournamentMatches { tournamentclassid, tournamenteventid, clientselectfunction }` → `table.matchlist`:
