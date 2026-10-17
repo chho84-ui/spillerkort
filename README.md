@@ -16,7 +16,7 @@ Bygget på data fra badmintonportalen.no og cup2000.dk.
 - **Backend:** Cloudflare Worker (`worker.js`)
   - Proxy mot badmintonportalen.no og cup2000.dk
   - Håndterer CORS-problemer
-  - KV-store for e-postvarsler
+  - KV-store for push-abonnementer
   - Deploy via `wrangler deploy` (se `wrangler.toml`)
 
 ## Filstruktur
