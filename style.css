@@ -59,8 +59,6 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-varsle-btn { display: block; width: 100%; background: #0a1628; border: 1px solid #0f3460; color: #aaa; border-radius: 6px; padding: 7px; font-size: 12px; cursor: pointer; margin-top: 6px; text-align: center; }
 .sk-varsle-btn:active { background: #0f3460; }
 .sk-varsle-form { background: #0a1220; border: 1px solid #0f3460; border-radius: 6px; padding: 10px; margin-top: 6px; }
-.sk-varsle-form input { width: 100%; background: #0a0a1e; border: 1px solid #0f3460; border-radius: 6px; color: #e0e0e0; padding: 9px 11px; font-size: 16px; margin: 6px 0; }
-.sk-varsle-form input:focus { outline: none; border-color: #53d8fb; }
 .sk-varsle-send { width: 100%; background: #e94560; color: #fff; border: none; border-radius: 6px; padding: 11px; font-size: 13px; font-weight: bold; cursor: pointer; margin-top: 2px; }
 .sk-varsle-send:active { background: #c73450; }
 .sk-varsle-send:disabled { background: #555; cursor: default; }
