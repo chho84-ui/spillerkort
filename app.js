@@ -855,7 +855,7 @@ function visTurnering(t) {
   // Turneringssiden hos badmintonportalen (info, invitasjon, klasser) for spillerens første klasse
   var klasseId = t.klasser && t.klasser[0] && String(t.klasser[0].id || '').replace(/\D/g, '');
   var tittel = esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering');
-  if (klasseId) tittel = '<a class="sk-tur-lenke" href="https://badmintonportalen.no/NBF/Turnering/VisResultater/#' + klasseId + ',"'
+  if (klasseId) tittel = '<a class="sk-tur-lenke" href="https://badmintonportalen.no/NBF/Turnering/VisInfo/#' + klasseId + '"'
     + ' target="_blank" rel="noopener" title="Åpne turneringen på badmintonportalen">' + tittel + ' <span class="sk-tur-lenke-ikon">↗</span></a>';
   sec.innerHTML = '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + liveKnappHtml + '</div>';
   // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
