@@ -36,14 +36,6 @@ function json(data, status) {
   });
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 async function finnCup2000Id(body) {
   let cup2000Id = null;
   if (body.cup2000Url) {
@@ -959,17 +951,6 @@ async function handleRequest(request, env) {
     return json(data);
   }
 
-  if (path === '/varsle') {
-    let body;
-    try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
-    const { email, tournamentNavn, cup2000Url, navn, klubb } = body;
-    if (!email || !tournamentNavn) return json({error: 'Mangler felt'}, 400);
-
-    const key = `varsle:${tournamentNavn}:${email}`;
-    await env.VARSLER.put(key, JSON.stringify({ email, tournamentNavn, cup2000Url: cup2000Url || '', navn: navn || '', klubb: klubb || '', registrert: Date.now() }), { expirationTtl: 60 * 60 * 24 * 30 });
-    return json({ok: true});
-  }
-
   if (path === '/push/subscribe') {
     let body;
     try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
@@ -1027,26 +1008,6 @@ async function sha256Hex(str) {
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function sendResend(email, fornavn, tournamentNavn, env) {
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${env.RESEND_API_KEY}`
-    },
-    body: JSON.stringify({
-      from: 'Goodminton <noreply@send.goodminton.no>',
-      to: [email],
-      subject: `Kampprogram klart \u2013 ${tournamentNavn}`,
-      html: `<p>Hei${fornavn ? ' ' + escapeHtml(fornavn) : ''}!</p>
-<p>Kamprogrammet for <strong>${escapeHtml(tournamentNavn)}</strong> er n\u00e5 tilgjengelig.</p>
-<p><a href="https://goodminton.no">Åpne goodminton.no</a> for \u00e5 se kampene dine.</p>
-<p style="color:#888;font-size:12px">Du mottar denne e-posten fordi du ba om varsel p\u00e5 goodminton.no.</p>`
-    })
-  });
-  return r.ok;
-}
-
 async function sendPush(subscription, payloadObj, env) {
   const vapid = {
     subject: env.VAPID_SUBJECT,
@@ -1087,26 +1048,16 @@ async function cup2000HarKamper(tournamentNavn, cup2000Url) {
 }
 
 async function handleScheduled(env) {
-  const [varsleList, pushList] = await Promise.all([
-    env.VARSLER.list({ prefix: 'varsle:' }),
-    env.VARSLER.list({ prefix: 'push:' })
-  ]);
-  if (!varsleList.keys.length && !pushList.keys.length) return;
+  const pushList = await env.VARSLER.list({ prefix: 'push:' });
+  if (!pushList.keys.length) return;
 
-  // Grupper begge varsel-typer per turnering, slik at cup2000HarKamper() kun kalles én gang per turnering
+  // Grupper per turnering, slik at cup2000HarKamper() kun kalles en gang per turnering
   const turneringer = {};
-  for (const key of varsleList.keys) {
-    const val = await env.VARSLER.get(key.name, { type: 'json' });
-    if (!val) continue;
-    const tn = val.tournamentNavn;
-    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [], pushAbonnenter: [] };
-    turneringer[tn].mottakere.push({ key: key.name, email: val.email, navn: val.navn });
-  }
   for (const key of pushList.keys) {
     const val = await env.VARSLER.get(key.name, { type: 'json' });
     if (!val) continue;
     const tn = val.tournamentNavn;
-    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, mottakere: [], pushAbonnenter: [] };
+    if (!turneringer[tn]) turneringer[tn] = { cup2000Url: val.cup2000Url, pushAbonnenter: [] };
     if (!turneringer[tn].cup2000Url) turneringer[tn].cup2000Url = val.cup2000Url;
     turneringer[tn].pushAbonnenter.push({ key: key.name, subscription: val.subscription });
   }
@@ -1115,13 +1066,7 @@ async function handleScheduled(env) {
     const harKamper = await cup2000HarKamper(tournamentNavn, info.cup2000Url);
     if (!harKamper) continue;
 
-    for (const m of info.mottakere) {
-      const fornavn = m.navn ? m.navn.split(' ')[0] : '';
-      const ok = await sendResend(m.email, fornavn, tournamentNavn, env);
-      if (ok) await env.VARSLER.delete(m.key);
-    }
-
-    const pushPayload = { title: 'Goodminton', body: `Kampprogrammet for ${tournamentNavn} er klart! 🏸`, url: 'https://goodminton.no' };
+    const pushPayload = { title: 'Goodminton', body: `Kampprogrammet for ${tournamentNavn} er klart! \u{1F3F8}`, url: 'https://goodminton.no' };
     for (const p of info.pushAbonnenter) {
       const { ok, status } = await sendPush(p.subscription, pushPayload, env);
       if (ok || status === 404 || status === 410) await env.VARSLER.delete(p.key);
