@@ -1686,6 +1686,34 @@ function visDeltakereKlasse(klasseId, tittel) {
   aapneDeltakere([], klasseId, tittel || 'Deltakere');
 }
 
+// Terminlista lenker bare til én klasse (som regel den øverste), så panelet åpnes med
+// den med én gang og klassevelgeren fylles ut når hele klasselista er hentet.
+function visDeltakereTur(tid, klasseId, tittel) {
+  aapneDeltakere([], klasseId, tittel || 'Deltakere');
+  hentAlleKlasser(tid).then(function(klasser) {
+    if (klasser.length < 2 || !document.getElementById('sk-delt-overlay')) return;
+    settDeltakerKlasser(klasser, klasseId);
+  }).catch(function() {});
+}
+
+function settDeltakerKlasser(klasser, valgt) {
+  var panel = document.querySelector('#sk-delt-overlay .sk-gruppe-panel');
+  var innhold = document.getElementById('sk-delt-innhold');
+  if (!panel || !innhold || panel.querySelector('.sk-delt-velg')) return;
+  var finnes = false;
+  for (var i = 0; i < klasser.length; i++) if (String(klasser[i].id) === String(valgt)) finnes = true;
+  if (!finnes) valgt = klasser[0].id;
+  var velger = document.createElement('select');
+  velger.className = 'sk-delt-velg';
+  velger.onchange = function() { lastDeltakere(this.value); };
+  velger.innerHTML = klasser.map(function(k) {
+    return '<option value="' + esc(k.id) + '"' + (String(k.id) === String(valgt) ? ' selected' : '') + '>'
+      + esc(k.name || ('Klasse ' + k.id)) + '</option>';
+  }).join('');
+  panel.insertBefore(velger, innhold);
+  if (!finnes) lastDeltakere(valgt);
+}
+
 function aapneDeltakere(klasser, start, tittel) {
   lukkDeltakere();
   var overlay = document.createElement('div');
@@ -1785,18 +1813,45 @@ function terminlisteApi(alder, krets) {
   var key = 'termin:' + sesong + ':' + alder + ':' + krets;
   var truffet = cacheGet(key);
   if (truffet) return Promise.resolve(truffet);
-  return api('GetSeasonPlan', {
-    seasonid: sesong,
-    regionids: krets ? [String(krets)] : null,
-    agegroupids: (alder && alder !== '0') ? [String(alder)] : null,
-    classids: ['0'],
-    strfrom: '', strto: '', strweekno: '', strweekno2: '', georegionids: null,
-    clubid: '', disciplines: null, playerid: null, birthdate: null, age: null,
-    points: null, gender: null, publicseasonplan: true, showleague: true,
-    selectclientfunction: null, page: 0
-  }).then(function(res) {
-    return cacheSet(key, parseTerminliste(String((res.d && (res.d.html || res.d.Html)) || res.d || '')));
+  function hent(scf) {
+    return api('GetSeasonPlan', {
+      seasonid: sesong,
+      regionids: krets ? [String(krets)] : null,
+      agegroupids: (alder && alder !== '0') ? [String(alder)] : null,
+      classids: ['0'],
+      strfrom: '', strto: '', strweekno: '', strweekno2: '', georegionids: null,
+      clubid: '', disciplines: null, playerid: null, birthdate: null, age: null,
+      points: null, gender: null, publicseasonplan: true, showleague: true,
+      selectclientfunction: scf, page: 0
+    }).then(function(res) { return String((res.d && (res.d.html || res.d.Html)) || res.d || ''); });
+  }
+  // Visningsvarianten har månedsoverskrifter, frist og lenker, men ingen turnerings-ID.
+  // onclick-varianten har SeasonPlan.SelectTournament(tid, cid). Samme filter gir samme
+  // rader, så de flettes på tittel – tid trengs for å liste alle klassene i turneringen.
+  return Promise.all([hent(null), hent('SeasonPlan.SelectTournament')]).then(function(svar) {
+    var grupper = parseTerminliste(svar[0]);
+    var tidPerTittel = turneringsIder(svar[1]);
+    for (var i = 0; i < grupper.length; i++) {
+      for (var j = 0; j < grupper[i].turneringer.length; j++) {
+        var t = grupper[i].turneringer[j];
+        t.tid = tidPerTittel[t.tittel] || '';
+      }
+    }
+    return cacheSet(key, grupper);
   });
+}
+
+function turneringsIder(html) {
+  var kart = {};
+  var re = /<tr[^>]*onclick=["'][^"']*SeasonPlan\.SelectTournament\((\d+),\s*(\d+)\)[^"']*["'][^>]*>([\s\S]*?)<\/tr>/g;
+  var m;
+  while ((m = re.exec(html)) !== null) {
+    var doc = new DOMParser().parseFromString('<table><tr>' + m[3] + '</tr></table>', 'text/html');
+    var tds = doc.querySelectorAll('td');
+    var tittel = tds[3] ? tds[3].textContent.replace(/\s+/g, ' ').trim() : '';
+    if (tittel && !kart[tittel]) kart[tittel] = m[1];
+  }
+  return kart;
 }
 
 function parseTerminliste(html) {
@@ -1907,7 +1962,9 @@ function renderTerminliste(grupper) {
     for (var j = 0; j < ts.length; j++) {
       var t = ts[j];
       var handlinger = '';
-      if (t.deltakerId) {
+      if (t.deltakerId && t.tid) {
+        handlinger += '<button class="sk-termin-btn" onclick="visDeltakereTur(\'' + escAttrJs(t.tid) + '\',\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
+      } else if (t.deltakerId) {
         handlinger += '<button class="sk-termin-btn" onclick="visDeltakereKlasse(\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
       }
       if (t.infoId) {
