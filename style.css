@@ -97,6 +97,33 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-live-sp { font-size: 12px; color: #e0e0e0; padding: 1px 0; }
 .sk-live-sp-mine { color: #53d8fb; font-weight: bold; }
 .sk-live-vs { font-size: 10px; color: #444; padding: 1px 0; }
+.sk-delt-velg { width: 100%; background: #0a0a1e; border: 1px solid #0f3460; border-radius: 6px; color: #e0e0e0; padding: 9px 11px; font-size: 14px; margin-bottom: 10px; }
+.sk-delt-velg:focus { outline: none; border-color: #53d8fb; }
+.sk-delt-rad { display: flex; align-items: flex-start; gap: 8px; text-align: left; background: #0d1a2e; border: 1px solid #1a2a4a; border-radius: 6px; padding: 7px 9px; margin-bottom: 5px; }
+.sk-delt-rad-meg { border-color: #53d8fb; background: rgba(83,216,251,.07); }
+.sk-delt-navn { flex: 1; font-size: 12px; color: #e0e0e0; line-height: 1.5; }
+.sk-delt-klubb { font-size: 10px; color: #888; }
+.sk-delt-meg { color: #53d8fb; font-weight: bold; }
+.sk-delt-xmakker { display: inline-block; font-size: 9px; color: #f0c040; border: 1px solid #5a4a10; border-radius: 4px; padding: 1px 5px; margin-top: 2px; }
+#termin-btn { width: 100%; background: #0f3460; color: #53d8fb; border: 1px solid #1a4a8a; border-radius: 8px; padding: 10px; font-size: 13px; cursor: pointer; margin-top: 6px; }
+#termin-btn:active { background: #1a4a8a; }
+.sk-termin-filtre { display: flex; gap: 6px; margin-bottom: 10px; }
+.sk-termin-filtre .sk-delt-velg { margin-bottom: 0; flex: 1; min-width: 0; }
+.sk-termin-rad { text-align: left; background: #0d1a2e; border: 1px solid #1a2a4a; border-radius: 6px; padding: 8px 9px; margin-bottom: 5px; }
+.sk-termin-rad.avlyst { opacity: .55; }
+.sk-termin-tittel { font-size: 12px; color: #e0e0e0; font-weight: bold; }
+.sk-termin-avlyst { font-size: 9px; color: #e94560; border: 1px solid #5a1020; border-radius: 4px; padding: 1px 5px; font-weight: normal; }
+.sk-termin-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 3px; }
+.sk-termin-dato { font-size: 11px; color: #53d8fb; font-weight: bold; }
+.sk-termin-uke { font-size: 10px; color: #555; }
+.sk-termin-frist { font-size: 10px; color: #888; }
+.sk-termin-frist.snart { color: #f0c040; font-weight: bold; }
+.sk-termin-frist.idag { color: #e94560; font-weight: bold; }
+.sk-termin-frist.utgatt { color: #555; }
+.sk-termin-klasser { font-size: 10px; color: #888; margin-top: 4px; line-height: 1.5; }
+.sk-termin-handlinger { display: flex; gap: 6px; margin-top: 6px; }
+.sk-termin-btn { display: inline-block; background: #0a1628; border: 1px solid #0f3460; color: #53d8fb; border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer; text-decoration: none; }
+.sk-termin-btn:active { background: #0f3460; }
 .sk-res-vinner { font-weight: bold; color: #fff; }
 .sk-res-vinner::after { content: ' ✓'; color: #4caf50; }
 .sk-h2h-mini { font-size: 9px; font-weight: bold; background: #0f3460; color: #53d8fb; padding: 2px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; cursor: pointer; border: 1px solid #1a4a8a; }
