@@ -128,12 +128,28 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
   `<a href='/NBF/Turnering/VisResultater/#KLASSEID,'>U15 A</a>`. Sesong-ID-er tilbake til `2002013` (2013/14).
 - Turneringsside for en klasse: `https://badmintonportalen.no/NBF/Turnering/VisResultater/#KLASSEID,` – turneringsbanneret lenker hit
   (spillerens første klasse).
+- `GetSeasonPlan` → terminlista. **Filtrene krever portalens egen payload-form:** `agegroupids`/`regionids`/`classids`
+  må være arrayer av *strenger* (`['2005']`, ikke `[2005]` eller `'2005'`), og `classids` må være satt – `['0']` betyr
+  «alle». Med `classids: null` ignoreres `agegroupids` stille og hele sesongen returneres.
+  Med `selectclientfunction: null` (ikke `'SeasonPlan.SelectTournament'`) kommer svaret som `table.dbfseasonplan`:
+  `tr.grouphdr` = månedsoverskrift, `tr.tablehdr` = kolonnenavn, `tr.row` / `tr.row alt` / `tr.row cancelled` = turneringer.
+  Rad: `td.week`, `td.date` («12.‑13.», U+2011), `td.title` («Arrangør: Navn»), `td.lastregistration` = påmeldingsfrist,
+  `td.classnames` (én per aldersklasse), `td.links` med `VisInfo/#<klasseId>`, `DeltagerListe/#<klasseId>`,
+  `VisResultater/#<klasseId>,` og **cup2000-lenken med `tournamentid`**.
+  ID-ene: sesong `200<år>`, krets `200001`–`200011`, aldersklasse `2001`=SEN, `2002`=U9 … `2007`=U19, `2017`=Åpen,
+  klasse `2001`=E … `2007`=HC.
+- `SearchRegistrationsByClass { tournamentclassid, clientselectfunction }` → alle påmeldte i én turneringsklasse:
+  `<h3>` per gren, så `table.GridView` med én rad per påmelding. Rad: `<td>` med `<a href='…/VisSpiller/#PID'>Navn</a>, Klubb`
+  (to lenker ved double, skilt med `<br>`), `checkmark.gif` = bekreftet, teksten `X-makker` = mangler makker.
+  **PID er samme spiller-ID som H2H bruker**, så deltakerlista kan lenke rett til `visH2H`.
+  `sjekkTurnering()` kaller dette per klasse for å finne spillerens påmeldinger; `visDeltakere()` viser alle radene.
+  Ingen innlogging, og `ListTruncated` er false selv for de største klassene (~100 spillere / ~83 KB).
 - `SearchTournamentResults { tournamentclassid }` → sluttplassering per gren (`<h2>Herredouble</h2>`), med lenken
   `TournamentResults.SelectEvent('KLASSEID','GRENID')` («Vis alle kamper»).
 - `SearchTournamentMatches { tournamentclassid, tournamenteventid, clientselectfunction }` → `table.matchlist`:
   `tr.headrow` = runde, `td.player` ×2 (lenker `VisSpiller/#SPILLERID`, klassen `winner` på vinnersiden),
   `td.result` = `"16/21,21/13,21/16"` (side 1/side 2 per sett) eller `"W.O."`.
-- `/api` cacher `SearchTournamentResults`/`SearchTournamentMatches` (1 t) og profiler fra tidligere sesonger (7 d) i
+- `/api` cacher `SearchTournamentResults`/`SearchTournamentMatches` (1 t), `SearchRegistrationsByClass` (10 min) og profiler fra tidligere sesonger (7 d) i
   Cloudflare Cache. Nåværende sesongs profil caches ikke, fordi rankingen da blir utdatert. Tomme svar caches ikke.
   `api(method, data, true)` sender `fersk: true`, som hopper over cachen. Brukes for sluttresultat i gruppevisning og
   resultater for nylig ferdigspilte turneringer.
@@ -150,6 +166,9 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `cup2000LiveApi(navn)` | Henter live-oversikt fra `/cup2000live` (30 sek cache) |
 | `visH2H(motId, motNavn)` | Head-to-head mot en motstander (spiller-ID fra `hentMotstanderRanking`). `hentH2H` finner felles klasser i spillernes profiler per sesong, grener der begge er med, og kampene deres |
 | `visResultater()` | «📈 Siste kamper» på ranking-banneret: den søkte spillerens kamper, nyeste turnering først, 5 om gangen (`RES_SIDE`). Bruker samme kall som H2H uten motstander. Motstandernavn åpner H2H |
+| `visDeltakere(tournamentId)` | Deltakerliste for hele turneringen. Klassene ligger i `_turKlasser` (satt av `visTurnering`), og hver klasse hentes lazy ved valg i nedtrekkslista. Spillernavn åpner `visH2H` |
+| `visDeltakereKlasse(id, tittel)` | Samme panel for én enkelt klasse, uten klassevelger. Brukes fra terminlista, som bare kjenner klasse-ID-en portalen lenker til |
+| `visTerminliste()` | Hele sesongens turneringer, gruppert per måned, med påmeldingsfrist og avlyst-merking. Filtre på aldersklasse og krets. Åpner på inneværende måned. Krever ikke at en spiller er søkt opp |
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |
