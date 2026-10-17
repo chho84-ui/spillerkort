@@ -2420,6 +2420,118 @@ function hent() {
 window.onload = function() {
   laster();
   visHurtigvalg();
+  sjekkInstallerHjelp();
   var n = document.getElementById('f-navn').value;
   if (n) hent();
 };
+// ── Installer som app ─────────────────────────────────────────────────────
+// Chrome, Samsung Internet og Edge på Android sender beforeinstallprompt når siden
+// kan installeres. Da viser vi en egen knapp i stedet for å stole på at folk finner
+// det i nettlesermenyen. iOS har ingen slik hendelse, og innebygde nettlesere
+// (Facebook, Instagram, Messenger …) kan ikke installere, så der forklarer knappen
+// hva man gjør. Banneret vises bare på mobil, aldri i installert app, og «✕» skjuler
+// det i INSTALLER_PAUSE_DAGER.
+var _installPrompt = null;
+var INSTALLER_PAUSE_DAGER = 30;
+
+function erInstallert() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+}
+
+function erIOS() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function erMobil() {
+  return erIOS() || /Android|Mobi/i.test(navigator.userAgent);
+}
+
+function erInnebygdNettleser() {
+  return /FBAN|FBAV|FB_IAB|Instagram|Messenger|Snapchat|LinkedInApp|Line\/|; wv\)/i.test(navigator.userAgent);
+}
+
+function installerPauset() {
+  var t = 0;
+  try { t = parseInt(localStorage.getItem('sk_installer_skjult') || '0', 10) || 0; } catch(e) {}
+  return Date.now() - t < INSTALLER_PAUSE_DAGER * 86400000;
+}
+
+function visInstallerBanner(tekst, knapp) {
+  if (erInstallert() || !erMobil() || installerPauset()) return;
+  var el = document.getElementById('installer-banner');
+  if (!el) return;
+  document.getElementById('installer-tekst').textContent = tekst || 'Installer Goodminton som app på telefonen';
+  document.getElementById('installer-btn').textContent = knapp || 'Installer';
+  el.style.display = 'flex';
+}
+
+function skjulInstaller(pause) {
+  var el = document.getElementById('installer-banner');
+  if (el) el.style.display = 'none';
+  if (pause) { try { localStorage.setItem('sk_installer_skjult', String(Date.now())); } catch(e) {} }
+}
+
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  _installPrompt = e;
+  visInstallerBanner();
+});
+
+window.addEventListener('appinstalled', function() {
+  _installPrompt = null;
+  skjulInstaller(false);
+});
+
+// Kalles fra window.onload: plattformer uten beforeinstallprompt får veiledning i stedet.
+function sjekkInstallerHjelp() {
+  if (_installPrompt) return;
+  if (erInnebygdNettleser()) visInstallerBanner('Åpne goodminton.no i nettleseren for å installere appen', 'Slik gjør du');
+  else if (erIOS()) visInstallerBanner('Legg Goodminton på hjemskjermen som en app', 'Slik gjør du');
+}
+
+function installerApp() {
+  if (_installPrompt) {
+    var p = _installPrompt;
+    _installPrompt = null;
+    p.prompt();
+    // Avbryter man, kan nettleseren sende en ny hendelse senere – da kommer knappen tilbake.
+    p.userChoice.then(function() { skjulInstaller(false); }).catch(function() {});
+    return;
+  }
+  visInstallerHjelp();
+}
+
+function visInstallerHjelp() {
+  lukkInstallerHjelp();
+  var steg;
+  if (erInnebygdNettleser()) {
+    steg = ['Trykk på menyen (<b>⋯</b> eller <b>⋮</b>) i appen du åpnet lenken fra',
+            'Velg <b>«Åpne i nettleser»</b> (eller «Åpne i Safari» / «Åpne i Chrome»)',
+            'Trykk <b>Installer</b> i banneret øverst på goodminton.no'];
+  } else if (erIOS()) {
+    steg = ['Trykk på <b>Del</b>-knappen (firkant med pil opp ⬆︎) i Safari',
+            'Bla ned og velg <b>«Legg til på Hjem-skjerm»</b>',
+            'Trykk <b>Legg til</b>. Goodminton ligger nå blant appene dine'];
+  } else {
+    steg = ['Åpne nettleserens meny (<b>⋮</b> eller <b>☰</b>)',
+            'Velg <b>«Installer app»</b> eller <b>«Legg til på startskjerm»</b>'];
+  }
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-installer-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkInstallerHjelp(); };
+  overlay.innerHTML = '<div class="sk-gruppe-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">📲 Installer Goodminton</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkInstallerHjelp()">✕</button>'
+    + '</div>'
+    + '<ol class="sk-installer-steg">' + steg.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ol>'
+    + '<div class="sk-installer-fordel">Appen åpner i fullskjerm uten adresselinje, og du finner den igjen på hjemskjermen.</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+}
+
+function lukkInstallerHjelp() {
+  var el = document.getElementById('sk-installer-overlay');
+  if (el) el.remove();
+}

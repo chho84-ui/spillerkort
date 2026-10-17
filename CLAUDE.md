@@ -174,6 +174,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `visDeltakereKlasse(id, tittel)` | Samme panel for én enkelt klasse, uten klassevelger. Fallback når turnerings-ID mangler |
 | `visTerminliste()` | Hele sesongens turneringer, gruppert per måned, med påmeldingsfrist og avlyst-merking. Filtre på aldersklasse og krets. Åpner på inneværende måned. Krever ikke at en spiller er søkt opp |
 | `terminPref()` / `lagreTerminPref()` / `hentPreferanser()` | Terminliste-filteret (aldersklasse + krets) huskes i `localStorage` (`sk_termin_pref`). Innlogget lagres det også i Firestore `users/{uid}/innstillinger/terminliste` og hentes ved innlogging, så det følger kontoen |
+| `installerApp()` / `visInstallerBanner()` | «Installer»-banneret under toppen, kun på mobil og aldri i installert app. Android (Chrome/Samsung/Edge): fanger `beforeinstallprompt` og viser nettleserens egen dialog. iOS og innebygde nettlesere (Facebook, Instagram, Messenger, Android-webview): «Slik gjør du» med steg (`visInstallerHjelp`). «✕» skjuler det i 30 dager (`sk_installer_skjult`) |
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |

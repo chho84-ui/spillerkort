@@ -189,6 +189,16 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .auth-bytt { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: #666; }
 .auth-bytt button { background: none; border: none; color: #53d8fb; font-size: 12px; cursor: pointer; padding: 0; }
 .auth-bytt button:hover { text-decoration: underline; }
+#installer-banner { display: none; align-items: center; gap: 8px; background: #0f3460; border-bottom: 1px solid #1a4a8a; padding: 8px 8px 8px 16px; }
+#installer-tekst { flex: 1; font-size: 12px; color: #e0e0e0; line-height: 1.4; }
+#installer-btn { background: #e94560; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+#installer-btn:active { background: #c73450; }
+.installer-x { background: none; border: none; color: #888; font-size: 16px; cursor: pointer; min-width: 36px; min-height: 36px; border-radius: 8px; }
+.installer-x:active { background: rgba(233,69,96,.15); color: #e94560; }
+.sk-installer-steg { margin: 0 0 12px 20px; padding: 0; font-size: 13px; color: #ccc; line-height: 1.6; }
+.sk-installer-steg li { margin-bottom: 6px; }
+.sk-installer-steg b { color: #fff; }
+.sk-installer-fordel { font-size: 11px; color: #888; line-height: 1.5; }
 #infoboks { background: #12112a; border-bottom: 1px solid #0f3460; padding: 10px 16px; }
 #infoboks p { font-size: 12px; color: #888; line-height: 1.6; }
 #infoboks strong { color: #ccc; }
