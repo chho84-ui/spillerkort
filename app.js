@@ -650,7 +650,7 @@ function sjekkTurnering(tid, info) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
     if (!regs.length) return null;
-    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, cup2000Ider: info.cup2000Ider || [], klasser: klasserMedSpiller, isPast: !!info.isPast, harStartet: !!info.harStartet };
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, cup2000Ider: info.cup2000Ider || [], klasser: klasserMedSpiller, alleKlasser: info.klasser || [], isPast: !!info.isPast, harStartet: !!info.harStartet };
   });
 }
 
@@ -857,7 +857,14 @@ function visTurnering(t) {
   var tittel = esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering');
   if (klasseId) tittel = '<a class="sk-tur-lenke" href="https://badmintonportalen.no/NBF/Turnering/VisInfo/#' + klasseId + '"'
     + ' target="_blank" rel="noopener" title="Åpne turneringen på badmintonportalen">' + tittel + ' <span class="sk-tur-lenke-ikon">↗</span></a>';
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + liveKnappHtml + '</div>';
+  // Deltakere er mest nyttig før turneringen (hvem er påmeldt, hvem mangler makker),
+  // så den vises uavhengig av om turneringen har startet.
+  var alleKl = (t.alleKlasser && t.alleKlasser.length) ? t.alleKlasser : (t.klasser || []);
+  _turKlasser[t.tournamentId] = { alle: alleKl, mine: t.klasser || [] };
+  var deltKnappHtml = alleKl.length
+    ? ' <button class="sk-live-btn" onclick="visDeltakere(\'' + escAttrJs(t.tournamentId) + '\')">👥 Deltakere</button>'
+    : '';
+  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + liveKnappHtml + deltKnappHtml + '</div>';
   // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
   if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(',')).catch(function() {});
   res.appendChild(sec);
@@ -1612,6 +1619,318 @@ function oppdaterLive(tournamentNavn) {
 
 function lukkLive() {
   var el = document.getElementById('sk-live-overlay');
+  if (el) el.remove();
+}
+
+// ── Deltakerliste ─────────────────────────────────────────────────────────
+// SearchRegistrationsByClass gir alle påmeldte i én turneringsklasse. Samme kall
+// som sjekkTurnering() bruker; her beholdes alle rader, ikke bare spillerens.
+// Klassene legges i _turKlasser når turneringen rendres, så onclick slipper å
+// bære hele lista.
+var _turKlasser = {};
+
+function deltakereApi(klasseId) {
+  var key = 'delt:' + klasseId;
+  var truffet = cacheGet(key);
+  if (truffet) return Promise.resolve(truffet);
+  return api('SearchRegistrationsByClass', {
+    tournamentclassid: parseInt(klasseId),
+    clientselectfunction: 'SelectTournamentClass1'
+  }).then(function(res) {
+    return cacheSet(key, parseDeltakere(String((res.d && res.d.Html) || '')));
+  });
+}
+
+function parseDeltakere(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var h3s = doc.querySelectorAll('h3');
+  var grener = [];
+  for (var i = 0; i < h3s.length; i++) {
+    var tabell = h3s[i].nextElementSibling;
+    if (!tabell) continue;
+    var trs = tabell.querySelectorAll('tr');
+    var rader = [];
+    for (var j = 0; j < trs.length; j++) {
+      var tr = trs[j];
+      var lenker = tr.querySelectorAll('a[href*="VisSpiller"]');
+      if (!lenker.length) continue; // hopper over overskriftsraden
+      var spillere = [];
+      for (var k = 0; k < lenker.length; k++) {
+        var idM = (lenker[k].getAttribute('href') || '').match(/VisSpiller\/#(\d+)/);
+        var etter = lenker[k].nextSibling;
+        var klubb = etter && etter.nodeType === 3
+          ? etter.textContent.replace(/^[,\s]+/, '').replace(/^br\s*\/?.*/i, '').trim() : '';
+        spillere.push({ id: idM ? idM[1] : '', navn: lenker[k].textContent.trim(), klubb: klubb });
+      }
+      rader.push({
+        spillere: spillere,
+        xmakker: tr.innerHTML.indexOf('X-makker') !== -1,
+        bekreftet: tr.innerHTML.indexOf('checkmark.gif') !== -1
+      });
+    }
+    if (rader.length) grener.push({ disiplin: h3s[i].textContent.trim(), rader: rader });
+  }
+  return grener;
+}
+
+function visDeltakere(tournamentId) {
+  var info = _turKlasser[tournamentId];
+  if (!info || !info.alle.length) return;
+  // Åpne på spillerens egen klasse når han har en
+  var start = (info.mine[0] && info.mine[0].id) || info.alle[0].id;
+  aapneDeltakere(info.alle, start, 'Deltakere');
+}
+
+// Fra terminlista har vi bare klasse-ID-en portalen lenker til, ikke hele klasselista.
+function visDeltakereKlasse(klasseId, tittel) {
+  aapneDeltakere([], klasseId, tittel || 'Deltakere');
+}
+
+function aapneDeltakere(klasser, start, tittel) {
+  lukkDeltakere();
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-delt-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkDeltakere(); };
+  var velger = '';
+  if (klasser.length > 1) {
+    velger = '<select class="sk-delt-velg" onchange="lastDeltakere(this.value)">' + klasser.map(function(k) {
+      return '<option value="' + esc(k.id) + '"' + (String(k.id) === String(start) ? ' selected' : '') + '>'
+        + esc(k.name || ('Klasse ' + k.id)) + '</option>';
+    }).join('') + '</select>';
+  }
+  overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">\uD83D\uDC65 ' + esc(tittel) + '</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkDeltakere()">\u2715</button>'
+    + '</div>'
+    + velger
+    + '<div id="sk-delt-innhold" style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  lastDeltakere(start);
+}
+
+function lastDeltakere(klasseId) {
+  var innhold = document.getElementById('sk-delt-innhold');
+  if (!innhold) return;
+  innhold.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>';
+  deltakereApi(klasseId).then(function(grener) {
+    var el = document.getElementById('sk-delt-innhold');
+    if (el) el.innerHTML = renderDeltakere(grener);
+  }).catch(function() {
+    var el = document.getElementById('sk-delt-innhold');
+    if (el) el.innerHTML = '<div style="color:#e94560;font-size:12px;text-align:center;padding:16px">Kunne ikke hente deltakere</div>';
+  });
+}
+
+function renderDeltakere(grener) {
+  if (!grener.length) return '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen påmeldte i denne klassen</div>';
+  var html = '';
+  for (var i = 0; i < grener.length; i++) {
+    var g = grener[i];
+    html += '<div class="sk-live-seksjon">' + esc(g.disiplin)
+      + ' <span class="sk-disc-count">(' + g.rader.length + ')</span></div>';
+    for (var j = 0; j < g.rader.length; j++) {
+      var r = g.rader[j];
+      var erMeg = false;
+      for (var m = 0; m < r.spillere.length; m++) {
+        if (String(r.spillere[m].id) === String(SI) || r.spillere[m].navn === SN) erMeg = true;
+      }
+      var navnHtml = r.spillere.map(function(s) {
+        var klubb = s.klubb ? ' <span class="sk-delt-klubb">' + esc(s.klubb) + '</span>' : '';
+        var egen = String(s.id) === String(SI) || s.navn === SN;
+        if (s.id && !egen) {
+          return '<span class="sk-mot-link" onclick="visH2H(\'' + escAttrJs(s.id) + '\',\'' + escAttrJs(s.navn) + '\')">'
+            + esc(s.navn) + '</span>' + klubb;
+        }
+        return '<span class="sk-delt-meg">' + esc(s.navn) + '</span>' + klubb;
+      }).join('<br>');
+      if (r.xmakker) navnHtml += '<br><span class="sk-delt-xmakker">søker makker</span>';
+      html += '<div class="sk-delt-rad' + (erMeg ? ' sk-delt-rad-meg' : '') + '">'
+        + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
+        + '<span class="sk-delt-navn">' + navnHtml + '</span>'
+        + '</div>';
+    }
+  }
+  return html;
+}
+
+function lukkDeltakere() {
+  var el = document.getElementById('sk-delt-overlay');
+  if (el) el.remove();
+}
+
+// ── Terminliste ───────────────────────────────────────────────────────────
+// GetSeasonPlan med portalens egen payload-form: agegroupids/classids må være
+// arrayer av *strenger*, og classids må være satt (['0'] = alle) – ellers
+// ignorerer tjenesten filtrene og returnerer hele sesongen. Svaret er én tabell
+// der tr.grouphdr starter en ny måned og tr.row er turneringene under den.
+var ALDERSKLASSER = [['0','Alle klasser'],['2001','SEN'],['2002','U9'],['2003','U11'],['2004','U13'],
+  ['2005','U15'],['2006','U17'],['2007','U19'],['2017','Åpen'],['2008','O35'],['2009','O40'],
+  ['2010','O45'],['2011','O50'],['2012','O55'],['2013','O60'],['2014','O65'],['2015','O70'],
+  ['2016','O75'],['2018','O80']];
+var KRETSER = [['','Hele landet'],['200002','Badmintonkretsen Sør'],['200003','Badmintonkretsen Vest'],
+  ['200004','Finnmark'],['200006','Hålogaland'],['200005','Innlandet'],['200007','Midtnorsk Nord'],
+  ['200008','Midtnorsk Sør'],['200009','Oslofjorden'],['200011','VBT']];
+
+function sesongId() {
+  if (SS) return String(SS);
+  var n = new Date();
+  return '200' + (n.getMonth() >= 6 ? n.getFullYear() : n.getFullYear() - 1);
+}
+
+function terminlisteApi(alder, krets) {
+  var sesong = sesongId();
+  var key = 'termin:' + sesong + ':' + alder + ':' + krets;
+  var truffet = cacheGet(key);
+  if (truffet) return Promise.resolve(truffet);
+  return api('GetSeasonPlan', {
+    seasonid: sesong,
+    regionids: krets ? [String(krets)] : null,
+    agegroupids: (alder && alder !== '0') ? [String(alder)] : null,
+    classids: ['0'],
+    strfrom: '', strto: '', strweekno: '', strweekno2: '', georegionids: null,
+    clubid: '', disciplines: null, playerid: null, birthdate: null, age: null,
+    points: null, gender: null, publicseasonplan: true, showleague: true,
+    selectclientfunction: null, page: 0
+  }).then(function(res) {
+    return cacheSet(key, parseTerminliste(String((res.d && (res.d.html || res.d.Html)) || res.d || '')));
+  });
+}
+
+function parseTerminliste(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var trs = doc.querySelectorAll('tr');
+  var grupper = [];
+  var naa = null;
+  for (var i = 0; i < trs.length; i++) {
+    var tr = trs[i];
+    var kl = tr.className || '';
+    if (kl.indexOf('grouphdr') !== -1) {
+      naa = { maaned: tr.textContent.trim(), turneringer: [] };
+      grupper.push(naa);
+      continue;
+    }
+    // tablehdr og de nøstede radene i klasse-tabellen har ingen 'row'-klasse
+    if (kl.indexOf('row') === -1 || !naa) continue;
+    var celle = function(navn) {
+      var el = tr.querySelector('td.' + navn);
+      return el ? el.textContent.replace(/\s+/g, ' ').trim() : '';
+    };
+    var infoId = '', deltakerId = '', program = '';
+    var lenker = tr.querySelectorAll('td.links a');
+    for (var j = 0; j < lenker.length; j++) {
+      var href = lenker[j].getAttribute('href') || '';
+      var m = href.match(/VisInfo\/#(\d+)/);
+      if (m) { infoId = m[1]; continue; }
+      m = href.match(/DeltagerListe\/#(\d+)/);
+      if (m) { deltakerId = m[1]; continue; }
+      if (href.indexOf('cup2000') !== -1) program = href.trim();
+    }
+    var klasser = [];
+    var kn = tr.querySelectorAll('td.classnames');
+    for (var k = 0; k < kn.length; k++) klasser.push(kn[k].textContent.replace(/\s+/g, ' ').trim());
+    naa.turneringer.push({
+      uke: celle('week'), dato: celle('date'), tittel: celle('title'),
+      frist: celle('lastregistration'), klasser: klasser,
+      avlyst: kl.indexOf('cancelled') !== -1,
+      infoId: infoId, deltakerId: deltakerId, program: program
+    });
+  }
+  return grupper.filter(function(g) { return g.turneringer.length; });
+}
+
+function fristMerke(frist) {
+  var d = (frist || '').split('.');
+  if (d.length < 3) return '';
+  var dato = new Date(parseInt(d[2]), parseInt(d[1]) - 1, parseInt(d[0]));
+  var idag = new Date(); idag.setHours(0, 0, 0, 0);
+  var dager = Math.round((dato - idag) / 86400000);
+  if (dager < 0) return '<span class="sk-termin-frist utgatt">frist gikk ut ' + esc(frist) + '</span>';
+  if (dager === 0) return '<span class="sk-termin-frist idag">frist i dag</span>';
+  if (dager <= 7) return '<span class="sk-termin-frist snart">frist om ' + dager + ' dag' + (dager === 1 ? '' : 'er') + '</span>';
+  return '<span class="sk-termin-frist">frist ' + esc(frist) + '</span>';
+}
+
+function visTerminliste() {
+  lukkTerminliste();
+  var overlay = document.createElement('div');
+  overlay.className = 'sk-gruppe-overlay';
+  overlay.id = 'sk-termin-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) lukkTerminliste(); };
+  var valg = function(liste, id) {
+    return '<select class="sk-delt-velg" id="' + id + '" onchange="lastTerminliste()">'
+      + liste.map(function(v) { return '<option value="' + esc(v[0]) + '">' + esc(v[1]) + '</option>'; }).join('')
+      + '</select>';
+  };
+  overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
+    + '<div class="sk-gruppe-hdr">'
+    + '<span class="sk-gruppe-tittel">📅 Terminliste</span>'
+    + '<button class="sk-gruppe-xbtn" onclick="lukkTerminliste()">✕</button>'
+    + '</div>'
+    + '<div class="sk-termin-filtre">' + valg(ALDERSKLASSER, 'sk-termin-alder') + valg(KRETSER, 'sk-termin-krets') + '</div>'
+    + '<div id="sk-termin-innhold" style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  lastTerminliste();
+}
+
+function lastTerminliste() {
+  var innhold = document.getElementById('sk-termin-innhold');
+  if (!innhold) return;
+  var alder = (document.getElementById('sk-termin-alder') || {}).value || '0';
+  var krets = (document.getElementById('sk-termin-krets') || {}).value || '';
+  innhold.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>';
+  terminlisteApi(alder, krets).then(function(grupper) {
+    var el = document.getElementById('sk-termin-innhold');
+    if (!el) return;
+    el.innerHTML = renderTerminliste(grupper);
+    // Sesongen starter i juli, så uten dette åpner lista på måneder som er passert.
+    var mnd = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+    var naa = new Date();
+    var seksjon = el.querySelector('[data-mnd="' + mnd[naa.getMonth()] + ' ' + naa.getFullYear() + '"]');
+    var panel = el.parentNode;
+    if (seksjon && panel) panel.scrollTop += seksjon.getBoundingClientRect().top - panel.getBoundingClientRect().top;
+  }).catch(function() {
+    var el = document.getElementById('sk-termin-innhold');
+    if (el) el.innerHTML = '<div style="color:#e94560;font-size:12px;text-align:center;padding:16px">Kunne ikke hente terminlista</div>';
+  });
+}
+
+function renderTerminliste(grupper) {
+  if (!grupper.length) return '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Ingen turneringer</div>';
+  var html = '';
+  for (var i = 0; i < grupper.length; i++) {
+    html += '<div class="sk-live-seksjon" data-mnd="' + esc(grupper[i].maaned) + '">' + esc(grupper[i].maaned) + '</div>';
+    var ts = grupper[i].turneringer;
+    for (var j = 0; j < ts.length; j++) {
+      var t = ts[j];
+      var handlinger = '';
+      if (t.deltakerId) {
+        handlinger += '<button class="sk-termin-btn" onclick="visDeltakereKlasse(\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
+      }
+      if (t.infoId) {
+        handlinger += '<a class="sk-termin-btn" target="_blank" rel="noopener" href="https://badmintonportalen.no/NBF/Turnering/VisInfo/#' + esc(t.infoId) + '">Info ↗</a>';
+      }
+      html += '<div class="sk-termin-rad' + (t.avlyst ? ' avlyst' : '') + '">'
+        + '<div class="sk-termin-tittel">' + esc(t.tittel)
+        + (t.avlyst ? ' <span class="sk-termin-avlyst">avlyst</span>' : '') + '</div>'
+        + '<div class="sk-termin-meta">'
+        + '<span class="sk-termin-dato">' + esc(t.dato) + '</span>'
+        + '<span class="sk-termin-uke">uke ' + esc(t.uke) + '</span>'
+        + fristMerke(t.frist)
+        + '</div>'
+        + (t.klasser.length ? '<div class="sk-termin-klasser">' + t.klasser.map(esc).join(' · ') + '</div>' : '')
+        + (handlinger ? '<div class="sk-termin-handlinger">' + handlinger + '</div>' : '')
+        + '</div>';
+    }
+  }
+  return html;
+}
+
+function lukkTerminliste() {
+  var el = document.getElementById('sk-termin-overlay');
   if (el) el.remove();
 }
 
