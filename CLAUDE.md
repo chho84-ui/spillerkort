@@ -173,6 +173,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `visDeltakereTur(tid, klasseId, tittel)` | Fra terminlista: åpner panelet på klassen portalen lenker til (som regel den øverste, f.eks. SEN E) og fyller inn klassevelgeren når `hentAlleKlasser(tid)` svarer |
 | `visDeltakereKlasse(id, tittel)` | Samme panel for én enkelt klasse, uten klassevelger. Fallback når turnerings-ID mangler |
 | `visTerminliste()` | Hele sesongens turneringer, gruppert per måned, med påmeldingsfrist og avlyst-merking. Filtre på aldersklasse og krets. Åpner på inneværende måned. Krever ikke at en spiller er søkt opp |
+| `terminPref()` / `lagreTerminPref()` / `hentPreferanser()` | Terminliste-filteret (aldersklasse + krets) huskes i `localStorage` (`sk_termin_pref`). Innlogget lagres det også i Firestore `users/{uid}/innstillinger/terminliste` og hentes ved innlogging, så det følger kontoen |
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
 | `oppdaterLive(navn)` | Tømmer cache og oppdaterer live-panel |

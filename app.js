@@ -34,6 +34,7 @@ auth.onAuthStateChanged(function(user) {
     var visNavn = user.displayName ? user.displayName.split(' ')[0] : (user.email ? user.email.split('@')[0] : '');
     document.getElementById('user-navn').textContent = visNavn;
     hentFavoritterCache();
+    hentPreferanser();
   } else {
     loginBtn.style.display = '';
     userInfo.style.display = 'none';
@@ -107,6 +108,37 @@ function loggInnGoogle() {
 
 function loggUt() {
   if (confirm('Vil du logge ut?')) auth.signOut();
+}
+
+// ── Preferanser ──────────────────────────────────────────────────────────
+// Terminliste-filteret huskes alltid lokalt. Er man innlogget, lagres det også
+// på kontoen (users/{uid}/innstillinger/terminliste) og følger med til andre enheter.
+function terminPref() {
+  var p = null;
+  try { p = JSON.parse(localStorage.getItem('sk_termin_pref') || 'null'); } catch(e) {}
+  return p && typeof p === 'object' ? p : {};
+}
+
+function lagreTerminPref(alder, krets) {
+  var p = { alder: alder, krets: krets };
+  try { localStorage.setItem('sk_termin_pref', JSON.stringify(p)); } catch(e) {}
+  if (!currentUser) return;
+  db.collection('users').doc(currentUser.uid).collection('innstillinger').doc('terminliste')
+    .set(p).catch(function(e) { console.warn('Kunne ikke lagre preferanser', e); });
+}
+
+function hentPreferanser() {
+  if (!currentUser) return;
+  db.collection('users').doc(currentUser.uid).collection('innstillinger').doc('terminliste').get().then(function(doc) {
+    if (doc.exists) {
+      var d = doc.data() || {};
+      try { localStorage.setItem('sk_termin_pref', JSON.stringify({ alder: d.alder || '0', krets: d.krets || '' })); } catch(e) {}
+    } else {
+      // Første innlogging: valget fra denne enheten blir kontoens standard.
+      var lokal = terminPref();
+      if (lokal.alder || lokal.krets) lagreTerminPref(lokal.alder || '0', lokal.krets || '');
+    }
+  }).catch(function(e) { console.warn('Kunne ikke hente preferanser', e); });
 }
 
 function hentFavoritterCache() {
@@ -1915,7 +1947,7 @@ function visTerminliste() {
   overlay.id = 'sk-termin-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) lukkTerminliste(); };
   var valg = function(liste, id) {
-    return '<select class="sk-delt-velg" id="' + id + '" onchange="lastTerminliste()">'
+    return '<select class="sk-delt-velg" id="' + id + '" onchange="terminFilterEndret()">'
       + liste.map(function(v) { return '<option value="' + esc(v[0]) + '">' + esc(v[1]) + '</option>'; }).join('')
       + '</select>';
   };
@@ -1928,6 +1960,18 @@ function visTerminliste() {
     + '<div id="sk-termin-innhold" style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>'
     + '</div>';
   document.body.appendChild(overlay);
+  var pref = terminPref();
+  var sett = function(id, liste, verdi) {
+    var finnes = liste.some(function(v) { return v[0] === verdi; });
+    if (finnes) document.getElementById(id).value = verdi;
+  };
+  sett('sk-termin-alder', ALDERSKLASSER, String(pref.alder || '0'));
+  sett('sk-termin-krets', KRETSER, String(pref.krets || ''));
+  lastTerminliste();
+}
+
+function terminFilterEndret() {
+  lagreTerminPref(document.getElementById('sk-termin-alder').value, document.getElementById('sk-termin-krets').value);
   lastTerminliste();
 }
 
