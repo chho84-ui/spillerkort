@@ -58,8 +58,11 @@ git push
 | `/app` | Proxy til badmintonportalen App.aspx |
 | `/cup2000` | Henter kampprogram + gruppestandings + sluttspill fra cup2000.dk |
 | `/cup2000live` | Henter alle kommende/pågående kamper (alle baner) + siste resultater fra cup2000.dk. Tar `cup2000Ider` (én per hall hvis turneringen er delt) og fletter dem med `hall` på hver kamp; uten ID-er brukes navneoppslag |
-| `/varsle` | Lagrer e-postvarsel i KV-store (VARSLER) |
+| `/push/subscribe` | Lagrer push-abonnement i KV-store (VARSLER), nøkkel `push:<turnering>:<hash>` |
+| `/push/test` | Sender testvarsel til alle abonnenter på en turnering (krever `STATS_TOKEN`) |
 | `/debug` | Sjekker badmintonportalen session-token |
+
+Varsling går kun via push. E-postvarsling (`/varsle` + Resend) er fjernet – den virket aldri.
 
 ---
 
