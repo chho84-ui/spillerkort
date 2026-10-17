@@ -195,6 +195,9 @@ async function handleRequest(request, env) {
     const gjeldendeSesong = 2000000 + (naa.getMonth() >= 6 ? naa.getFullYear() : naa.getFullYear() - 1);
     let ttl = 0;
     if (body.method === 'SearchTournamentMatches' || body.method === 'SearchTournamentResults') ttl = 3600;
+    // Påmeldinger siler inn før fristen og ligger fast etter trekningen. Deltakerlista henter
+    // alle klasser i en turnering, så uten cache blir det mange kall mot badmintonportalen.
+    if (body.method === 'SearchRegistrationsByClass') ttl = 600;
     if (body.method === 'GetPlayerProfile' && Number(body.data && body.data.seasonid) < gjeldendeSesong) ttl = 7 * 86400;
     const cacheKey = ttl ? new Request('https://cache.goodminton.no/api/' + body.method + '?' + encodeURIComponent(JSON.stringify(body.data))) : null;
     if (cacheKey && !body.fersk) {
