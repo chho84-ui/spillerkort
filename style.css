@@ -116,10 +116,10 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .sk-termin-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 3px; }
 .sk-termin-dato { font-size: 11px; color: #53d8fb; font-weight: bold; }
 .sk-termin-uke { font-size: 10px; color: #555; }
-.sk-termin-frist { font-size: 10px; color: #888; }
+.sk-termin-frist { font-size: 10px; color: #4caf50; }
 .sk-termin-frist.snart { color: #f0c040; font-weight: bold; }
-.sk-termin-frist.idag { color: #e94560; font-weight: bold; }
-.sk-termin-frist.utgatt { color: #555; }
+.sk-termin-frist.idag { color: #f0c040; font-weight: bold; }
+.sk-termin-frist.utgatt { color: #e94560; }
 .sk-termin-klasser { font-size: 10px; color: #888; margin-top: 4px; line-height: 1.5; }
 .sk-termin-handlinger { display: flex; gap: 6px; margin-top: 6px; }
 .sk-termin-btn { display: inline-block; background: #0a1628; border: 1px solid #0f3460; color: #53d8fb; border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer; text-decoration: none; }
