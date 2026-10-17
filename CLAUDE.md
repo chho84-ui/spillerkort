@@ -136,6 +136,9 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
   Rad: `td.week`, `td.date` («12.‑13.», U+2011), `td.title` («Arrangør: Navn»), `td.lastregistration` = påmeldingsfrist,
   `td.classnames` (én per aldersklasse), `td.links` med `VisInfo/#<klasseId>`, `DeltagerListe/#<klasseId>`,
   `VisResultater/#<klasseId>,` og **cup2000-lenken med `tournamentid`**.
+  Turnerings-ID-en finnes **kun** i `selectclientfunction: 'SeasonPlan.SelectTournament'`-varianten, som `SeasonPlan.SelectTournament(tid, cid)`
+  i rad-onclick. `/cup2000live` og terminlista henter derfor begge varianter og fletter dem på tittel – `tid` trengs for
+  `hentAlleKlasser()`, siden lenkene i tabellen bare peker på én klasse.
   ID-ene: sesong `200<år>`, krets `200001`–`200011`, aldersklasse `2001`=SEN, `2002`=U9 … `2007`=U19, `2017`=Åpen,
   klasse `2001`=E … `2007`=HC.
 - `SearchRegistrationsByClass { tournamentclassid, clientselectfunction }` → alle påmeldte i én turneringsklasse:
@@ -167,7 +170,8 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `visH2H(motId, motNavn)` | Head-to-head mot en motstander (spiller-ID fra `hentMotstanderRanking`). `hentH2H` finner felles klasser i spillernes profiler per sesong, grener der begge er med, og kampene deres |
 | `visResultater()` | «📈 Siste kamper» på ranking-banneret: den søkte spillerens kamper, nyeste turnering først, 5 om gangen (`RES_SIDE`). Bruker samme kall som H2H uten motstander. Motstandernavn åpner H2H |
 | `visDeltakere(tournamentId)` | Deltakerliste for hele turneringen. Klassene ligger i `_turKlasser` (satt av `visTurnering`), og hver klasse hentes lazy ved valg i nedtrekkslista. Spillernavn åpner `visH2H` |
-| `visDeltakereKlasse(id, tittel)` | Samme panel for én enkelt klasse, uten klassevelger. Brukes fra terminlista, som bare kjenner klasse-ID-en portalen lenker til |
+| `visDeltakereTur(tid, klasseId, tittel)` | Fra terminlista: åpner panelet på klassen portalen lenker til (som regel den øverste, f.eks. SEN E) og fyller inn klassevelgeren når `hentAlleKlasser(tid)` svarer |
+| `visDeltakereKlasse(id, tittel)` | Samme panel for én enkelt klasse, uten klassevelger. Fallback når turnerings-ID mangler |
 | `visTerminliste()` | Hele sesongens turneringer, gruppert per måned, med påmeldingsfrist og avlyst-merking. Filtre på aldersklasse og krets. Åpner på inneværende måned. Krever ikke at en spiller er søkt opp |
 | `visLive(navn, modus)` | Åpner live-panel overlay; `modus` = `'live'` (kamper i gang/neste) eller `'resultater'` (siste resultater) |
 | `renderLiveInnhold(data)` | Renderer innhold i live-panel (global, brukes av oppdaterLive) |
