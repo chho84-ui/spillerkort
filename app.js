@@ -546,9 +546,13 @@ function finnTurneringer() {
       // ikke ASCII-bindestrek. Uten hele dash-spekteret her faller endDay tilbake til
       // startdagen, og pågående turneringer blir feilaktig markert som ferdigspilt.
       var dayM = dager.match(/(\d+)\.?\s*[-\u2010-\u2015\u2212]\s*(\d+)/);
-      var endDay = dayM ? parseInt(dayM[2]) : parseInt(parts[0]);
-      var endDate = new Date(year, month, endDay);
-      var startDate = new Date(year, month, parseInt(parts[0]));
+      var startDag = parseInt(parts[0]);
+      var endDay = dayM ? parseInt(dayM[2]) : startDag;
+      // 'dager' er kun dagtall, s\u00e5 en turnering over m\u00e5nedsskiftet ser ut som "30.\u201101.".
+      // Uten m\u00e5nedsrulling havner sluttdatoen en m\u00e5ned for tidlig, og turneringen
+      // b\u00e5de merkes som ferdig og filtreres bort mens den p\u00e5g\u00e5r.
+      var endDate = new Date(year, month + (endDay < startDag ? 1 : 0), endDay);
+      var startDate = new Date(year, month, startDag);
       kmap[tid].isPast = (endDate < today);
       kmap[tid].harStartet = (startDate <= today);
       return endDate >= cutoff;
@@ -1289,15 +1293,13 @@ function aktiverPushVarsel(tournamentNavn, cup2000Url, statusEl) {
 
 function visVarsleSkjema(tournamentNavn, cup2000Url, container) {
   // Bytt ut knappen med inline-skjema
-  var lagretEpost = localStorage.getItem('sk_epost') || '';
-  var pushStottes = ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
   var form = document.createElement('div');
   form.className = 'sk-varsle-form';
 
-  if (pushStottes) {
+  if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
     var pushBtn = document.createElement('button');
     pushBtn.className = 'sk-varsle-send';
-    pushBtn.textContent = '🔔 Push-varsel på denne enheten';
+    pushBtn.textContent = '\uD83D\uDD14 Push-varsel p\u00e5 denne enheten';
     var pushStatus = document.createElement('div');
     pushStatus.style.cssText = 'font-size:11px;color:#aaa;margin-top:6px;min-height:14px';
     pushBtn.onclick = function() {
@@ -1310,58 +1312,17 @@ function visVarsleSkjema(tournamentNavn, cup2000Url, container) {
     };
     form.appendChild(pushBtn);
     form.appendChild(pushStatus);
-
-    var skille = document.createElement('div');
-    skille.style.cssText = 'text-align:center;font-size:11px;color:#555;margin:10px 0;text-transform:uppercase;letter-spacing:.05em';
-    skille.textContent = 'eller';
-    form.appendChild(skille);
+  } else {
+    var ustottet = document.createElement('div');
+    ustottet.style.cssText = 'font-size:11px;color:#aaa';
+    ustottet.textContent = 'Nettleseren din st\u00f8tter ikke push-varsler.';
+    form.appendChild(ustottet);
   }
-
-  var epostDiv = document.createElement('div');
-  epostDiv.innerHTML = '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Få e-post når kampprogram er tilgjengelig</div>'
-    + '<input type="email" id="sk-varsle-epost" placeholder="din@epost.no" value="' + esc(lagretEpost) + '">'
-    + '<button class="sk-varsle-send" onclick="sendVarsel(this,\'' + escAttrJs(tournamentNavn) + '\',\'' + escAttrJs(cup2000Url||'') + '\')">Send varsel</button>';
-  form.appendChild(epostDiv);
 
   // Fjern eksisterende varsle-knapper i denne containeren
   var existing = container.querySelectorAll('.sk-varsle-btn, .sk-varsle-mini, .sk-varsle-form');
   existing.forEach(function(el) { el.remove(); });
   container.appendChild(form);
-  var inp = document.getElementById('sk-varsle-epost');
-  if (inp) inp.focus();
-}
-
-function sendVarsel(btn, tournamentNavn, cup2000Url) {
-  var inp = document.getElementById('sk-varsle-epost');
-  var email = inp ? inp.value.trim() : '';
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    inp && (inp.style.borderColor = '#e94560');
-    return;
-  }
-  localStorage.setItem('sk_epost', email);
-  btn.disabled = true;
-  btn.textContent = 'Sender...';
-  fetch(PROXY + '/varsle', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: email,
-      tournamentNavn: tournamentNavn,
-      cup2000Url: cup2000Url || '',
-      navn: SN || '',
-      klubb: SK || ''
-    })
-  }).then(function(r) {
-    return r.json().then(function(d) { return { ok: r.ok, d: d }; });
-  }).then(function(res) {
-    if (!res.ok || !res.d || !res.d.ok) throw new Error('varsle-feil');
-    var form = btn.closest('.sk-varsle-form');
-    if (form) form.innerHTML = '<div style="font-size:12px;color:#7fffd4;padding:4px 0">\u2713 Vi varsler ' + esc(email) + ' når programmet er klart!</div>';
-  }).catch(function(err) {
-    console.error('Varsle-feil:', err);
-    btn.disabled = false;
-    btn.textContent = 'Send varsel';
-  });
 }
 
 // hentNy (valgfri): funksjon som henter gruppen på nytt og returnerer Promise<g>.
