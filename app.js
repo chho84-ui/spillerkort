@@ -1830,7 +1830,7 @@ var ALDERSKLASSER = [['0','Alle klasser'],['2001','SEN'],['2002','U9'],['2003','
   ['2005','U15'],['2006','U17'],['2007','U19'],['2017','Åpen'],['2008','O35'],['2009','O40'],
   ['2010','O45'],['2011','O50'],['2012','O55'],['2013','O60'],['2014','O65'],['2015','O70'],
   ['2016','O75'],['2018','O80']];
-var KRETSER = [['','Hele landet'],['200002','Badmintonkretsen Sør'],['200003','Badmintonkretsen Vest'],
+var KRETSER = [['','Hele landet'],['200001','Norges Badmintonforbund (nasjonale)'],['200002','Badmintonkretsen Sør'],['200003','Badmintonkretsen Vest'],
   ['200004','Finnmark'],['200006','Hålogaland'],['200005','Innlandet'],['200007','Midtnorsk Nord'],
   ['200008','Midtnorsk Sør'],['200009','Oslofjorden'],['200011','VBT']];
 
