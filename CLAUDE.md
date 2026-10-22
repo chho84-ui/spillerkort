@@ -169,6 +169,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 | `cup2000LiveApi(navn)` | Henter live-oversikt fra `/cup2000live` (30 sek cache) |
 | `visH2H(motId, motNavn)` | Head-to-head mot en motstander (spiller-ID fra `hentMotstanderRanking`). `hentH2H` finner felles klasser i spillernes profiler per sesong, grener der begge er med, og kampene deres |
 | `visResultater()` | «📈 Siste kamper» på ranking-banneret: den søkte spillerens kamper, nyeste turnering først, 5 om gangen (`RES_SIDE`). Bruker samme kall som H2H uten motstander. Motstandernavn åpner H2H |
+| `toggleFavoritt()` / `oppdaterStjerneknapp()` | Stjerneknappen (☆/★) i ranking-banneret, ved siden av «Siste kamper». Lagrer den søkte spilleren i Firestore `users/{uid}/favoritter`; krever innlogging |
 | `visDeltakere(tournamentId)` | Deltakerliste for hele turneringen. Klassene ligger i `_turKlasser` (satt av `visTurnering`), og hver klasse hentes lazy ved valg i nedtrekkslista. Spillernavn åpner `visH2H` |
 | `visDeltakereTur(tid, klasseId, tittel)` | Fra terminlista: åpner panelet på klassen portalen lenker til (som regel den øverste, f.eks. SEN E) og fyller inn klassevelgeren når `hentAlleKlasser(tid)` svarer |
 | `visDeltakereKlasse(id, tittel)` | Samme panel for én enkelt klasse, uten klassevelger. Fallback når turnerings-ID mangler |

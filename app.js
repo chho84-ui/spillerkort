@@ -306,7 +306,10 @@ function oppdaterStjerneknapp() {
   var btn = document.getElementById('sk-stjerne-btn');
   if (!btn || !SI) return;
   var fav = erFavoritt(String(SI));
-  btn.textContent = fav ? '★ Favoritt' : '☆ Lagre';
+  var tittel = fav ? 'Fjern fra favoritter' : 'Lagre som favoritt';
+  btn.textContent = fav ? '★' : '☆';
+  btn.title = tittel;
+  btn.setAttribute('aria-label', tittel);
   btn.classList.toggle('er-favoritt', fav);
 }
 
@@ -888,10 +891,12 @@ function visRanking(rows) {
   var res = document.getElementById('resultat');
   var sec = document.createElement('div');
   sec.className = 'sk-sek';
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>Ranking</h3>'
+  sec.innerHTML = '<div class="sk-sek-banner sk-rank-banner"><h3>Ranking</h3>'
+    + '<button id="sk-stjerne-btn" class="sk-live-btn sk-stjerne-btn" onclick="toggleFavoritt()">☆</button>'
     + '<button class="sk-live-btn" onclick="visResultater()">📈 Siste kamper</button></div>'
     + (rows.length ? '<div class="sk-grid" id="sk-rg"></div>' : '');
   res.appendChild(sec);
+  oppdaterStjerneknapp();
   var grid = document.getElementById('sk-rg');
   for (var i = 0; i < rows.length; i++) {
     var c = document.createElement('div');
@@ -2468,13 +2473,6 @@ function hent() {
     return Promise.all([hentRanking(), finnTurneringer()]).then(function(d) {
       if (gen !== _hentGen) return;
       sett('');
-      // Stjerneknapp
-      var res2 = document.getElementById('resultat');
-      var stjerneDiv = document.createElement('div');
-      stjerneDiv.style.cssText = 'text-align:right;margin-bottom:6px';
-      stjerneDiv.innerHTML = '<button id="sk-stjerne-btn" class="sk-stjerne-btn" onclick="toggleFavoritt()">☆ Lagre</button>';
-      res2.insertBefore(stjerneDiv, res2.firstChild);
-      oppdaterStjerneknapp();
       visRanking(d[0]);
       if (!d[1].length) {
         sett('Ingen kommende turneringer funnet.');

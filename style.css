@@ -158,9 +158,9 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
   #topbar h1 { font-size: 19px; }
   #topbar { gap: 6px; padding-left: 12px; padding-right: 8px; }
 }
-.sk-stjerne-btn { background: none; border: 1px solid #333; color: #888; border-radius: 8px; padding: 10px 16px; font-size: 13px; cursor: pointer; min-height: 42px; }
-.sk-stjerne-btn:hover { border-color: #f0c040; color: #f0c040; }
-.sk-stjerne-btn.er-favoritt { border-color: #f0c040; color: #f0c040; }
+.sk-live-btn.sk-stjerne-btn { color: #f0c040; font-size: 17px; line-height: 1; padding: 0 12px; min-width: 42px; }
+.sk-live-btn.sk-stjerne-btn.er-favoritt { background: rgba(240,192,64,.14); border-color: #f0c040; }
+.sk-rank-banner h3 { flex-basis: 90px; } /* «Ranking» er kort – la knappene få plass på smale skjermer */
 .sk-fav-rad { display: flex; align-items: center; gap: 8px; padding: 13px 6px; border-bottom: 1px solid #0f3460; cursor: pointer; }
 .sk-fav-rad:hover { background: rgba(83,216,251,.05); }
 .sk-fav-navn { flex: 1; font-size: 13px; color: #e0e0e0; }
