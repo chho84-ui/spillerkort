@@ -171,8 +171,8 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .ac-item:hover, .ac-item-valgt { background: rgba(83,216,251,.08); }
 .ac-navn { font-size: 14px; color: #e0e0e0; flex: 1; }
 .ac-klubb { font-size: 11px; color: #555; white-space: nowrap; }
-#auth-modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.auth-modal-boks { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 20px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 10px; }
+#auth-modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 300; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; }
+.auth-modal-boks { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 20px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 10px; margin: auto; } /* margin:auto sentrerer, men lar vinduet rulle når det er høyere enn skjermen */
 .auth-modal-hdr { display: flex; align-items: center; margin-bottom: 2px; }
 .auth-modal-hdr span { flex: 1; font-size: 15px; font-weight: bold; color: #e0e0e0; }
 .auth-google-btn { width: 100%; background: #fff; color: #222; border: none; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -187,6 +187,12 @@ button, .sk-mot-link, .sk-chip, .ac-item, .sk-fav-rad, .sk-btn { touch-action: m
 .auth-lenker { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
 .auth-lenker button { background: none; border: none; color: #53d8fb; font-size: 12px; cursor: pointer; padding: 4px 0; }
 .auth-lenker button:hover { text-decoration: underline; }
+.auth-lim { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #0f3460; padding-top: 10px; }
+.auth-lim-tekst { font-size: 12px; color: #aaa; line-height: 1.5; }
+.auth-lim-tekst b { color: #e0e0e0; }
+#auth-lim-btn { background: #0f3460; border: 1px solid #1a4a8a; color: #53d8fb; border-radius: 8px; padding: 10px; font-size: 13px; font-weight: bold; cursor: pointer; }
+#auth-lim-btn:active { background: #1a4a8a; }
+#auth-lim-btn:disabled { opacity: .6; cursor: default; }
 #auth-submit-btn { width: 100%; background: #e94560; color: #fff; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-weight: bold; cursor: pointer; }
 #auth-submit-btn:disabled { background: #555; cursor: default; }
 #auth-submit-btn:active { background: #c73450; }

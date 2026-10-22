@@ -50,10 +50,15 @@ function aapneAuthModal() {
   _authModus = 'login';
   oppdaterAuthModal();
   document.getElementById('auth-modal').style.display = 'flex';
-  document.getElementById('auth-epost').value = '';
+  // Venter en innloggingslenke (sendt fra denne enheten), vises feltet for å lime den inn.
+  var venter = null;
+  try { venter = localStorage.getItem(LENKE_EPOST); } catch(e) {}
+  document.getElementById('auth-epost').value = venter || '';
   document.getElementById('auth-passord').value = '';
+  document.getElementById('auth-lim-felt').value = '';
+  visLimFelt(!!venter);
   authMelding('');
-  setTimeout(function() { document.getElementById('auth-epost').focus(); }, 50);
+  setTimeout(function() { document.getElementById(venter ? 'auth-lim-felt' : 'auth-epost').focus(); }, 50);
 }
 
 function lukkAuthModal() {
@@ -113,6 +118,7 @@ function authFeiltekst(e) {
     'auth/unauthorized-continue-uri': 'Domenet er ikke godkjent for innlogging.',
     'auth/unauthorized-domain': 'Domenet er ikke godkjent for innlogging.',
     'auth/invalid-action-code': 'Lenken er utløpt eller allerede brukt. Be om en ny.',
+    'auth/invalid-email-link': 'Lenken er utløpt eller allerede brukt. Be om en ny.',
     'auth/expired-action-code': 'Lenken er utløpt. Be om en ny.'
   };
   if (e && e.code && !mld[e.code]) console.error(e);
@@ -147,8 +153,46 @@ function sendInnloggingslenke() {
   authMelding('Sender...', true);
   auth.sendSignInLinkToEmail(epost, { url: location.origin + location.pathname, handleCodeInApp: true }).then(function() {
     try { localStorage.setItem(LENKE_EPOST, epost); } catch(e) {}
-    authMelding('Lenke sendt til ' + epost + '. Åpne den på denne enheten for å logge inn. Sjekk også søppelpost.', true);
+    authMelding('Lenke sendt til ' + epost + '. Sjekk også søppelpost.', true);
+    visLimFelt(true);
   }).catch(function(e) { authMelding(authFeiltekst(e)); });
+}
+
+// E-postapper (Gmail, Outlook …) åpner lenker i sin egen nettleser, og appen på
+// hjemskjermen har egen lagring – da havner innloggingen feil sted. Lenken kan i stedet
+// kopieres og limes inn her, så innloggingen skjer i appen.
+function visLimFelt(vis) {
+  document.getElementById('auth-lim').style.display = vis ? '' : 'none';
+}
+
+function pakkUtLenke(lenke) {
+  // Gmail og andre pakker iblant lenker inn i en videresending (google.com/url?q=…).
+  for (var i = 0; i < 3 && !auth.isSignInWithEmailLink(lenke); i++) {
+    var m = lenke.match(/[?&](?:q|url|u|link)=([^&]+)/);
+    if (!m) break;
+    try { lenke = decodeURIComponent(m[1]); } catch(e) { break; }
+  }
+  return lenke;
+}
+
+function loggInnMedLimtLenke() {
+  var lenke = pakkUtLenke(document.getElementById('auth-lim-felt').value.trim());
+  if (!lenke || !auth.isSignInWithEmailLink(lenke)) {
+    authMelding('Det ser ikke ut som innloggingslenken. Kopier hele lenken fra e-posten.');
+    return;
+  }
+  var epost = document.getElementById('auth-epost').value.trim();
+  if (!epost) { try { epost = localStorage.getItem(LENKE_EPOST) || ''; } catch(e) {} }
+  if (!epost) { authMelding('Skriv inn e-posten du ba om lenken til.'); document.getElementById('auth-epost').focus(); return; }
+  var btn = document.getElementById('auth-lim-btn');
+  btn.disabled = true;
+  authMelding('Logger inn...', true);
+  auth.signInWithEmailLink(epost, lenke).then(function() {
+    try { localStorage.removeItem(LENKE_EPOST); } catch(e) {}
+    lukkAuthModal();
+  }).catch(function(e) {
+    authMelding(authFeiltekst(e));
+  }).finally(function() { btn.disabled = false; });
 }
 
 function fullforLenkeInnlogging() {
