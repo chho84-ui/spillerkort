@@ -13,6 +13,7 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
 var auth = firebase.auth();
+auth.languageCode = 'no'; // e-poster for nytt passord og innloggingslenke på norsk
 var currentUser = null;
 var _favoritter = {}; // cache: playerId -> true/false
 
@@ -51,7 +52,7 @@ function aapneAuthModal() {
   document.getElementById('auth-modal').style.display = 'flex';
   document.getElementById('auth-epost').value = '';
   document.getElementById('auth-passord').value = '';
-  document.getElementById('auth-feil').textContent = '';
+  authMelding('');
   setTimeout(function() { document.getElementById('auth-epost').focus(); }, 50);
 }
 
@@ -66,31 +67,106 @@ function oppdaterAuthModal() {
   document.getElementById('auth-bytt-tekst').textContent = erReg ? 'Har du allerede konto?' : 'Har du ikke konto?';
   document.querySelector('.auth-bytt button').textContent = erReg ? 'Logg inn' : 'Opprett konto';
   document.getElementById('auth-passord').autocomplete = erReg ? 'new-password' : 'current-password';
+  document.getElementById('auth-glemt-btn').style.display = erReg ? 'none' : '';
 }
 
 function byttAuthModus() {
   _authModus = _authModus === 'login' ? 'register' : 'login';
   oppdaterAuthModal();
-  document.getElementById('auth-feil').textContent = '';
+  authMelding('');
 }
 
 function authMedEpost() {
   var epost = document.getElementById('auth-epost').value.trim();
   var passord = document.getElementById('auth-passord').value;
-  var feilEl = document.getElementById('auth-feil');
   var btn = document.getElementById('auth-submit-btn');
-  if (!epost || !passord) { feilEl.textContent = 'Fyll inn e-post og passord.'; return; }
+  if (!epost || !passord) { authMelding('Fyll inn e-post og passord.'); return; }
   btn.disabled = true;
-  feilEl.textContent = '';
+  authMelding('');
   var prom = _authModus === 'register'
     ? auth.createUserWithEmailAndPassword(epost, passord)
     : auth.signInWithEmailAndPassword(epost, passord);
   prom.then(function() {
     lukkAuthModal();
   }).catch(function(e) {
-    var mld = { 'auth/email-already-in-use': 'E-posten er allerede i bruk.', 'auth/invalid-email': 'Ugyldig e-postadresse.', 'auth/weak-password': 'Passordet er for svakt (min. 6 tegn).', 'auth/user-not-found': 'Fant ingen konto med denne e-posten.', 'auth/wrong-password': 'Feil passord.', 'auth/invalid-credential': 'Feil e-post eller passord.' };
-    feilEl.textContent = mld[e.code] || 'Noe gikk galt. Prøv igjen.';
+    authMelding(authFeiltekst(e));
   }).finally(function() { btn.disabled = false; });
+}
+
+function authMelding(tekst, ok) {
+  var el = document.getElementById('auth-feil');
+  el.textContent = tekst || '';
+  el.classList.toggle('ok', !!ok);
+}
+
+function authFeiltekst(e) {
+  var mld = {
+    'auth/email-already-in-use': 'E-posten er allerede i bruk.',
+    'auth/invalid-email': 'Ugyldig e-postadresse.',
+    'auth/missing-email': 'Skriv inn e-posten din.',
+    'auth/weak-password': 'Passordet er for svakt (min. 6 tegn).',
+    'auth/user-not-found': 'Fant ingen konto med denne e-posten.',
+    'auth/wrong-password': 'Feil passord.',
+    'auth/invalid-credential': 'Feil e-post eller passord.',
+    'auth/too-many-requests': 'For mange forsøk. Vent litt og prøv igjen.',
+    'auth/operation-not-allowed': 'Denne innloggingsmåten er ikke slått på ennå.',
+    'auth/unauthorized-continue-uri': 'Domenet er ikke godkjent for innlogging.',
+    'auth/unauthorized-domain': 'Domenet er ikke godkjent for innlogging.',
+    'auth/invalid-action-code': 'Lenken er utløpt eller allerede brukt. Be om en ny.',
+    'auth/expired-action-code': 'Lenken er utløpt. Be om en ny.'
+  };
+  if (e && e.code && !mld[e.code]) console.error(e);
+  return (e && mld[e.code]) || 'Noe gikk galt. Prøv igjen.';
+}
+
+function epostFraModal() {
+  var felt = document.getElementById('auth-epost');
+  var epost = felt.value.trim();
+  if (!epost) { authMelding('Skriv inn e-posten din først.'); felt.focus(); }
+  return epost;
+}
+
+function glemtPassord() {
+  var epost = epostFraModal();
+  if (!epost) return;
+  authMelding('Sender...', true);
+  auth.sendPasswordResetEmail(epost).then(function() {
+    // Firebase sier ikke om kontoen finnes (vern mot oppslag av e-poster).
+    authMelding('Finnes det en konto med denne e-posten, får du en lenke for å lage nytt passord. Sjekk også søppelpost.', true);
+  }).catch(function(e) { authMelding(authFeiltekst(e)); });
+}
+
+// Innlogging uten passord: Firebase sender en lenke som går via firebaseapp.com og
+// tilbake hit med ?mode=signIn&oobCode=…. E-posten huskes lokalt så vi slipper å spørre
+// når lenken åpnes på samme enhet.
+var LENKE_EPOST = 'sk_lenke_epost';
+
+function sendInnloggingslenke() {
+  var epost = epostFraModal();
+  if (!epost) return;
+  authMelding('Sender...', true);
+  auth.sendSignInLinkToEmail(epost, { url: location.origin + location.pathname, handleCodeInApp: true }).then(function() {
+    try { localStorage.setItem(LENKE_EPOST, epost); } catch(e) {}
+    authMelding('Lenke sendt til ' + epost + '. Åpne den på denne enheten for å logge inn. Sjekk også søppelpost.', true);
+  }).catch(function(e) { authMelding(authFeiltekst(e)); });
+}
+
+function fullforLenkeInnlogging() {
+  var lenke = location.href;
+  if (!auth.isSignInWithEmailLink(lenke)) return;
+  // Engangskoden skal ikke bli liggende i adresselinjen, historikken eller et bokmerke.
+  history.replaceState(null, '', location.pathname);
+  var epost = null;
+  try { epost = localStorage.getItem(LENKE_EPOST); } catch(e) {}
+  if (!epost) epost = (prompt('Bekreft e-posten du ba om innloggingslenke til:') || '').trim();
+  if (!epost) return;
+  auth.signInWithEmailLink(epost, lenke).then(function() {
+    try { localStorage.removeItem(LENKE_EPOST); } catch(e) {}
+  }).catch(function(e) {
+    aapneAuthModal();
+    document.getElementById('auth-epost').value = epost;
+    authMelding(authFeiltekst(e));
+  });
 }
 
 function loggInn() {
@@ -2418,6 +2494,7 @@ function hent() {
 }
 
 window.onload = function() {
+  fullforLenkeInnlogging();
   laster();
   visHurtigvalg();
   sjekkInstallerHjelp();
