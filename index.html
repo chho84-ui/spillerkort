@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Goodminton">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -77,6 +77,11 @@
       <button id="auth-glemt-btn" type="button" onclick="glemtPassord()">Glemt passord?</button>
       <button type="button" onclick="sendInnloggingslenke()">Send meg en innloggingslenke</button>
     </div>
+    <div id="auth-lim" class="auth-lim" style="display:none">
+      <div class="auth-lim-tekst"><b>Bruker du appen fra hjemskjermen?</b> Ikke trykk på lenken i e-posten, da åpnes den i e-postappens nettleser. Trykk lenge på den, velg «Kopier lenke», og lim den inn her:</div>
+      <input id="auth-lim-felt" type="url" inputmode="url" placeholder="Lim inn lenken fra e-posten" autocomplete="off">
+      <button id="auth-lim-btn" type="button" onclick="loggInnMedLimtLenke()">Logg inn med lenken</button>
+    </div>
     <div class="auth-bytt">
       <span id="auth-bytt-tekst">Har du ikke konto?</span>
       <button onclick="byttAuthModus()">Opprett konto</button>
@@ -88,7 +93,7 @@
   <div class="sk-status" id="st">Skriv inn et navn og trykk Søk.</div>
 </div>
 
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "6f3f2a277b9b4779b45a8e9281fdb684"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
