@@ -713,6 +713,7 @@ function finnTurneringer() {
       return endDate >= cutoff;
     });
     sett('Sjekker ' + tids.length + ' turneringer...');
+    _turFeilet = 0;
 
     var playerKey = SN + '|' + SK;
     var lagrede = hentLagredeTurneringer(playerKey);
@@ -760,8 +761,25 @@ function finnTurneringer() {
   });
 }
 
+// Oppslag mot badmintonportalen kan feile når mange turneringer sjekkes samtidig. Workeren
+// svarer da med { error } (HTTP 500), som før ble lest som «ingen påmeldinger» – turneringen
+// forsvant stille. Nå prøves det én gang til, og det som fortsatt feiler telles i _turFeilet.
+var _turFeilet = 0;
+
+function medNyttForsok(fn) {
+  return fn().catch(function() {
+    return new Promise(function(r) { setTimeout(r, 800); }).then(fn);
+  });
+}
+
 function hentAlleKlasser(tournamentId) {
-  return appApi({ command: 18, unionid: 200, tournamentid: parseInt(tournamentId), commandversion: 6 })
+  return medNyttForsok(function() {
+    return appApi({ command: 18, unionid: 200, tournamentid: parseInt(tournamentId), commandversion: 6 })
+      .then(function(data) {
+        if (!data || data.error) throw new Error('klasser');
+        return data;
+      });
+  })
     .then(function(data) {
       var results = data.searchresult || [];
       var klasser = [];
@@ -772,7 +790,7 @@ function hentAlleKlasser(tournamentId) {
       }
       return klasser.length > 0 ? klasser : [{ id: String(tournamentId), name: '' }];
     })
-    .catch(function() { return [{ id: String(tournamentId), name: '' }]; });
+    .catch(function() { _turFeilet++; return [{ id: String(tournamentId), name: '' }]; });
 }
 
 function sjekkTurnering(tid, info) {
@@ -782,9 +800,14 @@ function sjekkTurnering(tid, info) {
     var klasseNavn = kl.name || '';
     var ageGroupM = klasseNavn.match(/^(U\d+|Senior|Junior|SEN)/i);
     var ageGroup = ageGroupM ? ageGroupM[1].toUpperCase() : '';
-    return api('SearchRegistrationsByClass', {
-      tournamentclassid: parseInt(cid),
-      clientselectfunction: 'SelectTournamentClass1'
+    return medNyttForsok(function() {
+      return api('SearchRegistrationsByClass', {
+        tournamentclassid: parseInt(cid),
+        clientselectfunction: 'SelectTournamentClass1'
+      }).then(function(res) {
+        if (!res || res.error || res.d == null) throw new Error('påmeldinger');
+        return res;
+      });
     }).then(function(res) {
       var html = String((res.d && res.d.Html) || '');
       // En turnering kan være delt på flere cup2000-turneringer (f.eks. to haller), én per klasse.
@@ -798,8 +821,9 @@ function sjekkTurnering(tid, info) {
       if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
       klasserMedSpiller.push(kl);
       return parseKlasse(html, ageGroup);
-    }).catch(function() { return []; });
+    }).catch(function() { info.feilet = true; return []; });
   })).then(function(alleRegs) {
+    if (info.feilet) _turFeilet++;
     var regs = [];
     for (var i = 0; i < alleRegs.length; i++) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
@@ -2526,6 +2550,11 @@ function hent() {
         sett('Ingen kommende turneringer funnet.');
       } else {
         d[1].forEach(visTurnering);
+      }
+      if (_turFeilet) {
+        var st = document.getElementById('st');
+        st.textContent = (st.textContent ? st.textContent + ' ' : '') + '⚠️ ' + _turFeilet
+          + (_turFeilet === 1 ? ' turnering' : ' turneringer') + ' kunne ikke sjekkes. Søk på nytt for å prøve igjen.';
       }
     });
   }).catch(function(e) {
