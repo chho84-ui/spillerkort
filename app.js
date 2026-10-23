@@ -1038,8 +1038,8 @@ function visTurnering(t) {
   var tittel = esc(_turDato) + ' \u2014 ' + esc(t.navn || 'Turnering');
   if (klasseId) tittel = '<a class="sk-tur-lenke" href="https://badmintonportalen.no/NBF/Turnering/VisInfo/#' + klasseId + '"'
     + ' target="_blank" rel="noopener" title="Åpne turneringen på badmintonportalen">' + tittel + ' <span class="sk-tur-lenke-ikon">↗</span></a>';
-  // Deltakere er mest nyttig før turneringen (hvem er påmeldt, hvem mangler makker),
-  // så den vises uavhengig av om turneringen har startet.
+  // Deltakere er mest nyttig før programmet er klart (hvem er påmeldt, hvem mangler makker).
+  // Når programmet er publisert, erstatter Program-knappen den.
   var alleKl = (t.alleKlasser && t.alleKlasser.length) ? t.alleKlasser : (t.klasser || []);
   _turKlasser[t.tournamentId] = { alle: alleKl, mine: t.klasser || [] };
   var deltKnappHtml = alleKl.length
@@ -1053,7 +1053,7 @@ function visTurnering(t) {
   }
   // Med flere knapper får ikke tittel og knapper plass på én linje på mobil.
   // Da får tittelen egen linje og knappene deler raden under.
-  var knapper = liveKnappHtml + deltKnappHtml + progKnappHtml;
+  var knapper = liveKnappHtml + (progKnappHtml || deltKnappHtml);
   var antKnapper = (knapper.match(/<button/g) || []).length;
   sec.innerHTML = antKnapper > 1
     ? '<div class="sk-sek-banner sk-tur-banner-full"><h3>' + tittel + '</h3><div class="sk-banner-knapper">' + knapper + '</div></div>'
@@ -2322,14 +2322,14 @@ function renderTerminliste(grupper) {
     for (var j = 0; j < ts.length; j++) {
       var t = ts[j];
       var handlinger = '';
-      if (t.deltakerId && t.tid) {
-        handlinger += '<button class="sk-termin-btn" onclick="visDeltakereTur(\'' + escAttrJs(t.tid) + '\',\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
-      } else if (t.deltakerId) {
-        handlinger += '<button class="sk-termin-btn" onclick="visDeltakereKlasse(\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
-      }
+      // Når programmet er publisert, erstatter det deltakerlista.
       var cupId = (String(t.program || '').match(/tournamentid=(\d+)/i) || [])[1];
       if (cupId) {
         handlinger += '<button class="sk-termin-btn" onclick="visProgramCup(\'' + escAttrJs(cupId) + '\',\'' + escAttrJs(t.tittel) + '\')">Program</button>';
+      } else if (t.deltakerId && t.tid) {
+        handlinger += '<button class="sk-termin-btn" onclick="visDeltakereTur(\'' + escAttrJs(t.tid) + '\',\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
+      } else if (t.deltakerId) {
+        handlinger += '<button class="sk-termin-btn" onclick="visDeltakereKlasse(\'' + escAttrJs(t.deltakerId) + '\',\'' + escAttrJs(t.tittel) + '\')">Deltakere</button>';
       }
       if (t.infoId) {
         handlinger += '<a class="sk-termin-btn" target="_blank" rel="noopener" href="https://badmintonportalen.no/NBF/Turnering/VisInfo/#' + esc(t.infoId) + '">Info ↗</a>';
