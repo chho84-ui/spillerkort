@@ -222,6 +222,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
   henter derfor hvert spillested med `&vi=<indeks>&dt=<dagens dato>&pi=-1` og fletter dem. `GET /cup2000js?id=…&s=ord1|ord2`
   viser utdrag av cup2000-sidens JavaScript, nyttig hvis formatet endrer seg.
 - **Turnering delt på flere haller** – hver hall er en egen cup2000-turnering. ID-ene hentes fra klassenes cup2000-lenker hos badmintonportalen (`t.cup2000Ider`); navneoppslaget finner bare én
+- **Feil fra badmintonportalen er ikke «ingen påmeldinger»** – workeren svarer `{ error }` (HTTP 500) når portalen feiler, og `api()` kaster ikke. `finnTurneringer()` sjekker hundrevis av klasser samtidig, så enkelte kall kan feile. `hentAlleKlasser()`/`sjekkTurnering()` prøver derfor én gang til (`medNyttForsok`), og det som fortsatt feiler telles i `_turFeilet` og vises som «N turneringer kunne ikke sjekkes»
 - **git push avvises** – GitHub har nye commits fra API-deploy; bruk alltid `git pull --rebase origin main` før push
 - **wrangler `--account-id`** – virker ikke, bruk env var `CLOUDFLARE_ACCOUNT_ID` i stedet
 
