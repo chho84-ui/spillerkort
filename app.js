@@ -1021,7 +1021,11 @@ function visTurnering(t) {
   var deltKnappHtml = alleKl.length
     ? ' <button class="sk-live-btn" onclick="visDeltakere(\'' + escAttrJs(t.tournamentId) + '\')">👥 Deltakere</button>'
     : '';
-  sec.innerHTML = '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + liveKnappHtml + deltKnappHtml + '</div>';
+  // Med Live + Resultater + Deltakere får ikke tittel og knapper plass på én linje på mobil.
+  // Da får tittelen egen linje og knappene deler raden under likt.
+  sec.innerHTML = liveKnappHtml
+    ? '<div class="sk-sek-banner sk-tur-banner-full"><h3>' + tittel + '</h3><div class="sk-banner-knapper">' + liveKnappHtml + deltKnappHtml + '</div></div>'
+    : '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + deltKnappHtml + '</div>';
   // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
   if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(',')).catch(function() {});
   res.appendChild(sec);
