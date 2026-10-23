@@ -1224,6 +1224,10 @@ function visTurnering(t) {
         return;
       }
 
+      // Portalen lenker ikke alltid til cup2000 (f.eks. Haugerud), men kampprogrammet ble
+      // funnet via navneoppslag – da er programmet publisert, og Program erstatter Deltakere.
+      if (!_turProgram[t.tournamentId]) leggTilProgramKnapp(sec, t);
+
       // Sorter kamper etter tidspunkt
       kamper.sort(function(a, b) {
         var ta = parseTid(a.tid), tb = parseTid(b.tid);
@@ -2004,6 +2008,19 @@ function visProgram(tournamentId) {
   if (p) aapneProgram(p.ider, p.navn, p.mine);
 }
 
+// Uten cup2000-ID-er fra portalen: workeren finner turneringen på navn (som /cup2000).
+function leggTilProgramKnapp(sec, t) {
+  _turProgram[t.tournamentId] = { ider: [], navn: t.navn || '', mine: t.registreringer || [] };
+  var btn = document.createElement('button');
+  btn.className = 'sk-live-btn';
+  btn.textContent = '📅 Program';
+  btn.onclick = function() { visProgram(t.tournamentId); };
+  var delt = sec.querySelector('.sk-sek-banner button[onclick^="visDeltakere("]');
+  if (delt) { delt.parentNode.replaceChild(btn, delt); return; }
+  var plass = sec.querySelector('.sk-banner-knapper') || sec.querySelector('.sk-sek-banner');
+  if (plass) plass.appendChild(btn);
+}
+
 // Fra terminlista: cup2000-lenken i raden har turnerings-ID-en.
 function visProgramCup(cupId, tittel) {
   aapneProgram([cupId], tittel, []);
@@ -2012,6 +2029,7 @@ function visProgramCup(cupId, tittel) {
 function aapneProgram(ider, tittel, mine) {
   lukkProgram();
   _prog = { ider: ider, klasser: [], valgt: 0, mine: mine || [] };
+  var sporring = ider.length ? { cup2000Ider: ider } : { tournamentNavn: tittel };
   var overlay = document.createElement('div');
   overlay.className = 'sk-gruppe-overlay';
   overlay.id = 'sk-prog-overlay';
@@ -2027,7 +2045,7 @@ function aapneProgram(ider, tittel, mine) {
     + '<div id="sk-prog-innhold" class="sk-prog-tom">Henter klasser...</div>'
     + '</div>';
   document.body.appendChild(overlay);
-  programApi({ cup2000Ider: ider }).then(function(d) {
+  programApi(sporring).then(function(d) {
     if (!document.getElementById('sk-prog-overlay')) return;
     var klasser = d.klasser || [];
     if (!klasser.length) {

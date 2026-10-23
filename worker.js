@@ -721,7 +721,12 @@ async function handleRequest(request, env) {
     const tall = v => String(v == null ? '' : v).replace(/\D/g, '');
     const ider = [...new Set((body.cup2000Ider || []).map(tall).filter(Boolean))].slice(0, 3);
     const id = tall(body.id), c = tall(body.c), e = tall(body.e);
-    if (!id && !ider.length) return json({ error: 'Mangler cup2000-ID' }, 400);
+    // Portalen lenker ikke alltid til cup2000 – da finnes turneringen på navn, som i /cup2000.
+    if (!id && !ider.length && body.tournamentNavn) {
+      const funnet = await finnCup2000Id({ tournamentNavn: String(body.tournamentNavn) }).catch(() => null);
+      if (funnet) ider.push(String(funnet));
+    }
+    if (!id && !ider.length) return json(body.tournamentNavn ? { klasser: [] } : { error: 'Mangler cup2000-ID' }, body.tournamentNavn ? 200 : 400);
     if (id && (!c || !e)) return json({ error: 'Mangler klasse' }, 400);
 
     // Klasselista endrer seg nesten aldri; kampene får resultater underveis.
