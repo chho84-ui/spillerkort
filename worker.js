@@ -59,6 +59,88 @@ async function finnCup2000Id(body) {
   return cup2000Id;
 }
 
+const CUP_BASE = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
+const CUP_UA = { 'User-Agent': 'Mozilla/5.0' };
+function decEntCup(s) {
+  return String(s).replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
+// Alle klasser i en cup2000-turnering: [{ c, e, disc, ageGroup }]. Brukes av /cup2000 og /cup2000program.
+async function hentCup2000Klasser(cup2000Id) {
+  // Klasse-navigasjon (c=0) gir alle c/e-kombinasjoner
+  const navJson = await (await fetch(`${CUP_BASE}?tournamentid=${cup2000Id}&c=0`, { headers: CUP_UA })).json();
+  const classes = [];
+
+  if (typeof navJson.data === 'string') {
+    // renderMethod 1: HTML med klasse-lenker
+    for (const row of navJson.data.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
+      const ag = row[1].replace(/&nbsp;/g, '').trim();
+      if (!ag || ag === 'Klasser') continue;
+      for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]+)<\/a>/g)) {
+        classes.push({ c: lm[1], e: lm[2], disc: lm[3].trim(), ageGroup: ag });
+      }
+    }
+  }
+
+  if (!classes.length) {
+    // Fallback: hent klasse-lenker fra HTML-siden (fungerer uavhengig av renderMethod)
+    const pageHtml = await (await fetch(`https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=${cup2000Id}`, { headers: CUP_UA })).text();
+    for (const lm of pageHtml.matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]{2,40})<\/a>/g)) {
+      const c = lm[1], e = lm[2], disc = lm[3].trim();
+      if (!classes.some(x => x.c === c && x.e === e) && /single|double|mixed/i.test(disc)) {
+        classes.push({ c, e, disc, ageGroup: '' });
+      }
+    }
+  }
+
+  // renderMethod=2 fra Cloudflare: cup2000.dk returnerer én klasse per c/e-kall.
+  // Skan sekvensielt per c (e=0..4 parallelt per c) for å holde oss innenfor
+  // Cloudflare free plans grense på 50 subrequests per request (det kommer flere
+  // kall per klasse etterpå). Klassene ligger sammenhengende, men trenger ikke
+  // starte på c=0 — derfor avbrytes først på en tom rad ETTER at noe er funnet.
+  // Hardt tak på 35 kall totalt i skanningen.
+  if (!classes.length && navJson.renderMethod === 2) {
+    const MAKS_SKANN_KALL = 35;
+    let skannKall = 0;
+    for (let sc = 0; sc <= 14 && skannKall < MAKS_SKANN_KALL; sc++) {
+      const ePairs = [];
+      for (let se = 0; se <= 4; se++) ePairs.push(se);
+      const gjenstaende = MAKS_SKANN_KALL - skannKall;
+      const radePairs = ePairs.slice(0, gjenstaende);
+      if (!radePairs.length) break;
+      skannKall += radePairs.length;
+      const c = String(sc);
+      const scanResults = await Promise.all(radePairs.map(async (se) => {
+        const e = String(se);
+        try {
+          const d = await (await fetch(`${CUP_BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: CUP_UA })).json();
+          if (d.renderMethod === 2 && Array.isArray(d.data) && d.data[0] && d.data[0][2]) {
+            return { c, e, disc: decEntCup(String(d.data[0][2])), ageGroup: '' };
+          }
+        } catch {}
+        return null;
+      }));
+      const funnet = scanResults.filter(Boolean);
+      funnet.forEach(r => {
+        if (!classes.some(x => x.c === r.c && x.e === r.e)) classes.push(r);
+      });
+      if (!funnet.length && classes.length) break;
+    }
+  }
+  return classes;
+}
+
+// "HH:MM DD-MM-YYYY" eller "YYYY-MM-DD HH:MM" → { dato: 'YYYY-MM-DD', kl: 'HH:MM' }
+function kampDatoKl(raw) {
+  const t = String(raw || '').trim();
+  let m = t.match(/^(\d{1,2}:\d{2})\s+(\d{2})-(\d{2})-(\d{4})/);
+  if (m) return { dato: `${m[4]}-${m[3]}-${m[2]}`, kl: m[1].padStart(5, '0') };
+  m = t.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2})/);
+  if (m) return { dato: `${m[1]}-${m[2]}-${m[3]}`, kl: m[4].padStart(5, '0') };
+  m = t.match(/(\d{1,2}:\d{2})/);
+  return { dato: '', kl: m ? m[1].padStart(5, '0') : '' };
+}
+
 function parseKampTid(raw) {
   const rawTime = String(raw || '');
   const tp = rawTime.trim().split(/\s+/);
@@ -292,66 +374,8 @@ async function handleRequest(request, env) {
     const navnLower = navnFull;
     const klubbLower = (body.klubb || '').toLowerCase();
 
-    // Steg 2: Hent klasse-navigasjon for å finne alle c/e-kombinasjoner
-    const navJson = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=0`, { headers: UA })).json();
-    const classes = [];
-
-    if (typeof navJson.data === 'string') {
-      // renderMethod 1: HTML med klasse-lenker
-      for (const row of navJson.data.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
-        const ag = row[1].replace(/&nbsp;/g, '').trim();
-        if (!ag || ag === 'Klasser') continue;
-        for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]+)<\/a>/g)) {
-          classes.push({ c: lm[1], e: lm[2], disc: lm[3].trim(), ageGroup: ag });
-        }
-      }
-    }
-
-    if (!classes.length) {
-      // Fallback: hent klasse-lenker fra HTML-siden (fungerer uavhengig av renderMethod)
-      const pageHtml = await (await fetch(`https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=${cup2000Id}`, { headers: UA })).text();
-      for (const lm of pageHtml.matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]{2,40})<\/a>/g)) {
-        const c = lm[1], e = lm[2], disc = lm[3].trim();
-        if (!classes.some(x => x.c === c && x.e === e) && /single|double|mixed/i.test(disc)) {
-          classes.push({ c, e, disc, ageGroup: '' });
-        }
-      }
-    }
-
-    // renderMethod=2 fra Cloudflare: cup2000.dk returnerer én klasse per c/e-kall.
-    // Skan sekvensielt per c (e=0..4 parallelt per c) for å holde oss innenfor
-    // Cloudflare free plans grense på 50 subrequests per request (det kommer flere
-    // kall per klasse etterpå). Klassene ligger sammenhengende, men trenger ikke
-    // starte på c=0 — derfor avbrytes først på en tom rad ETTER at noe er funnet.
-    // Hardt tak på 35 kall totalt i skanningen.
-    if (!classes.length && navJson.renderMethod === 2) {
-      const MAKS_SKANN_KALL = 35;
-      let skannKall = 0;
-      for (let sc = 0; sc <= 14 && skannKall < MAKS_SKANN_KALL; sc++) {
-        const ePairs = [];
-        for (let se = 0; se <= 4; se++) ePairs.push(se);
-        const gjenstaende = MAKS_SKANN_KALL - skannKall;
-        const radePairs = ePairs.slice(0, gjenstaende);
-        if (!radePairs.length) break;
-        skannKall += radePairs.length;
-        const c = String(sc);
-        const scanResults = await Promise.all(radePairs.map(async (se) => {
-          const e = String(se);
-          try {
-            const d = await (await fetch(`${BASE}?tournamentid=${cup2000Id}&c=${c}&e=${e}`, { headers: UA })).json();
-            if (d.renderMethod === 2 && Array.isArray(d.data) && d.data[0] && d.data[0][2]) {
-              return { c, e, disc: decEnt(String(d.data[0][2])), ageGroup: '' };
-            }
-          } catch {}
-          return null;
-        }));
-        const funnet = scanResults.filter(Boolean);
-        funnet.forEach(r => {
-          if (!classes.some(x => x.c === r.c && x.e === r.e)) classes.push(r);
-        });
-        if (!funnet.length && classes.length) break;
-      }
-    }
+    // Steg 2: Finn alle klasser (c/e-kombinasjoner)
+    const classes = await hentCup2000Klasser(cup2000Id);
 
     if (!classes.length) return json({ kamper: [] });
 
@@ -685,6 +709,104 @@ async function handleRequest(request, env) {
     const kamper = allResults.flatMap(r => r.kamper).sort((a, b) => (a.tid || '').localeCompare(b.tid || ''));
     const grupper = allResults.flatMap(r => r.grupper);
     return json({ kamper, grupper });
+  }
+
+  // Hele programmet for en turnering, én klasse om gangen (som deltakerlista).
+  // Uten id: { klasser: [{ id, c, e, navn, hall }] } for alle cup2000-ID-ene (én per hall).
+  // Med id/c/e: { kamper: [{ dato, kl, nr, runde, sp1, sp2, sett, vinner }] } for én klasse –
+  // alle puljekamper og sluttspill, sortert på tid.
+  if (path === '/cup2000program') {
+    let body;
+    try { body = await request.json(); } catch(e) { return json({error: 'Ugyldig JSON'}, 400); }
+    const tall = v => String(v == null ? '' : v).replace(/\D/g, '');
+    const ider = [...new Set((body.cup2000Ider || []).map(tall).filter(Boolean))].slice(0, 3);
+    const id = tall(body.id), c = tall(body.c), e = tall(body.e);
+    if (!id && !ider.length) return json({ error: 'Mangler cup2000-ID' }, 400);
+    if (id && (!c || !e)) return json({ error: 'Mangler klasse' }, 400);
+
+    // Klasselista endrer seg nesten aldri; kampene får resultater underveis.
+    const ttl = id ? 60 : 600;
+    const cacheKey = new Request('https://cache.goodminton.no/cup2000program?' + encodeURIComponent(JSON.stringify(id ? { id, c, e } : { ider })));
+    if (!body.fersk) {
+      const hit = await caches.default.match(cacheKey);
+      if (hit) return json(await hit.json());
+    }
+    const svar = async data => {
+      if ((data.klasser && data.klasser.length) || (data.kamper && data.kamper.length)) {
+        await caches.default.put(cacheKey, new Response(JSON.stringify(data), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=' + ttl }
+        }));
+      }
+      return json(data);
+    };
+
+    if (!id) {
+      const lister = await Promise.all(ider.map(x => hentCup2000Klasser(x).catch(() => [])));
+      const klasser = [];
+      lister.forEach((liste, i) => liste.forEach(k => klasser.push({
+        id: ider[i], c: k.c, e: k.e,
+        navn: ((k.ageGroup ? k.ageGroup + ' ' : '') + decEntCup(k.disc)).trim(),
+        hall: ider.length > 1 && lister.filter(l => l.length).length > 1 ? 'Hall ' + (i + 1) : ''
+      })));
+      return svar({ klasser });
+    }
+
+    const hent = async q => (await fetch(`${CUP_BASE}?tournamentid=${id}&c=${c}&e=${e}${q}`, { headers: CUP_UA })).json();
+    const navnFra = arr => (Array.isArray(arr) ? arr : []).map(n => {
+      const t = decEntCup(String(n)).replace(/^Vinder af kamp/i, 'Vinner av kamp');
+      return { navn: t.split(',')[0].trim(), klubb: (t.split(',')[1] || '').trim() };
+    });
+    const kamper = [];
+    const leggTil = (m, runde, kart) => {
+      if (!Array.isArray(m)) return;
+      // idx -1 = ukjent ennå (sluttspill): navnetekst som «Vinder af kamp 62» ligger i m[6]/m[7]
+      const side = (idx, tekst) => (idx !== -1 && kart[idx]) ? kart[idx] : navnFra(tekst);
+      const score = String(m[3] || '').trim();
+      kamper.push(Object.assign(kampDatoKl(m[2]), {
+        nr: String(m[0] == null ? '' : m[0]), runde,
+        sp1: side(m[8], m[6]), sp2: side(m[9], m[7]),
+        sett: score ? score.split(/\s+/).map(x => x.replace('/', '-')) : [],
+        vinner: m[5] === 1 || m[5] === 2 ? m[5] : 0
+      }));
+    };
+    const pulje = (data, navn) => {
+      const kart = {};
+      for (const s of (data[1] || [])) if (Array.isArray(s)) kart[s[0]] = navnFra(s[5]);
+      const liste = Array.isArray(data[2]) && Array.isArray(data[2][0]) ? data[2][0] : [];
+      for (const m of liste) leggTil(m, navn, kart);
+    };
+    const sluttspill = (data) => {
+      const tittel = decEntCup(String(data[0] || '')).trim().replace(/sluttspil\b/i, 'sluttspill') || 'Sluttspill';
+      const kart = {};
+      for (const s of (data[1] || [])) if (Array.isArray(s)) kart[s[0]] = navnFra(s[3]);
+      for (const runde of (Array.isArray(data[2]) ? data[2] : [])) {
+        if (!Array.isArray(runde) || !Array.isArray(runde[1])) continue;
+        const liste = Array.isArray(runde[1][0]) ? runde[1][0] : runde[1];
+        for (const m of liste) leggTil(m, tittel, kart);
+      }
+    };
+
+    let d;
+    try { d = await hent(''); } catch(err) { return json({ error: 'Kunne ikke hente klassen fra cup2000' }, 502); }
+    if (!Array.isArray(d.data)) return svar({ kamper: [] });
+    if (d.renderMethod === 3 && typeof d.data[0] === 'string') {
+      pulje(d.data, decEntCup(d.data[0]).trim() || 'Pulje');           // klasse med én pulje
+    } else if (typeof d.data[0] === 'string') {
+      sluttspill(d.data);                                             // rent sluttspill
+    } else {
+      // Maks 30 puljer + 6 sluttspill-sider holder oss under 50 subrequests (gratisplanen)
+      const puljer = d.data[0] && Array.isArray(d.data[0][3]) ? d.data[0][3].slice(0, 30) : [];
+      const pdata = await Promise.all(puljer.map(p => hent('&p=0&g=' + p[0]).catch(() => null)));
+      pdata.forEach((pd, i) => { if (pd && Array.isArray(pd.data) && pd.data.length >= 3) pulje(pd.data, 'Pulje ' + (i + 1)); });
+      for (let p = 1; p <= 6; p++) {
+        let sp;
+        try { sp = await hent('&p=' + p); } catch(err) { break; }
+        if (!Array.isArray(sp.data) || sp.data.length < 3 || typeof sp.data[0] !== 'string') break;
+        sluttspill(sp.data);
+      }
+    }
+    kamper.sort((a, b) => (a.dato + a.kl).localeCompare(b.dato + b.kl) || (parseInt(a.nr) || 0) - (parseInt(b.nr) || 0));
+    return svar({ kamper });
   }
 
   if (path === '/cup2000live') {
