@@ -1987,12 +1987,13 @@ function renderDeltakere(grener) {
 var _turProgram = {};
 var _prog = null; // { ider, klasser, valgt, mine }
 
-function programApi(body, fersk) {
+// fersk: hopp over all cache (↻). utenLokal: hopp bare over appens cache (bakgrunnsoppdatering).
+function programApi(body, fersk, utenLokal) {
   var key = 'prog:' + JSON.stringify(body);
   var e = _cache[key];
   // Klasselista caches som annet (10 min), kampene kort siden resultater kommer underveis.
   var ttl = body.id ? CUP2000_TTL : CACHE_TTL;
-  if (!fersk && e && (Date.now() - e.ts < ttl)) return Promise.resolve(e.val);
+  if (!fersk && !utenLokal && e && (Date.now() - e.ts < ttl)) return Promise.resolve(e.val);
   return fetch(PROXY + '/cup2000program', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2060,6 +2061,12 @@ function aapneProgram(ider, tittel, mine) {
         }).join('') + '</select>'
       : '';
     lastProgramKlasse();
+    // Resultater og hvem som går videre i sluttspillet kommer underveis: oppdater hvert minutt
+    // mens panelet er åpent og synlig.
+    var timer = _prog.timer = setInterval(function() {
+      if (!document.getElementById('sk-prog-overlay')) { clearInterval(timer); return; }
+      if (!document.hidden) lastProgramKlasse(false, true);
+    }, 60000);
   }).catch(function() {
     var el = document.getElementById('sk-prog-innhold');
     if (el) el.innerHTML = '<span style="color:#e94560">Kunne ikke hente programmet</span>';
@@ -2078,24 +2085,31 @@ function programStartKlasse(klasser, mine) {
   return 0;
 }
 
-function lastProgramKlasse(fersk) {
+// stille = bakgrunnsoppdatering: ingen «Laster...», ingen hopping, og feil ignoreres.
+function lastProgramKlasse(fersk, stille) {
   var innhold = document.getElementById('sk-prog-innhold');
   if (!innhold || !_prog || !_prog.klasser.length) return;
   var k = _prog.klasser[_prog.valgt] || _prog.klasser[0];
-  innhold.className = 'sk-prog-tom';
-  innhold.textContent = 'Laster...';
-  programApi({ id: k.id, c: k.c, e: k.e }, fersk).then(function(d) {
+  if (!stille) {
+    innhold.className = 'sk-prog-tom';
+    innhold.textContent = 'Laster...';
+  }
+  // Bakgrunnsoppdatering hopper over appens cache, men ikke workerens (60 s).
+  programApi({ id: k.id, c: k.c, e: k.e }, fersk, stille).then(function(d) {
     var el = document.getElementById('sk-prog-innhold');
-    if (!el || _prog.klasser[_prog.valgt] !== k) return;
+    if (!el || !_prog || _prog.klasser[_prog.valgt] !== k) return;
     var kamper = d.kamper || [];
-    if (!kamper.length) { el.textContent = 'Ingen kamper i programmet for denne klassen ennå.'; return; }
-    el.className = '';
-    el.innerHTML = renderProgram(kamper);
-    // Under turneringen: hopp til første kamp uten resultat.
-    var neste = el.querySelector('.sk-prog-neste');
+    if (!kamper.length) { el.className = 'sk-prog-tom'; el.textContent = 'Ingen kamper i programmet for denne klassen ennå.'; return; }
     var panel = el.closest('.sk-gruppe-panel');
-    if (neste && panel && el.querySelector('.sk-res-sett')) panel.scrollTop += neste.getBoundingClientRect().top - panel.getBoundingClientRect().top - 60;
+    var rull = panel ? panel.scrollTop : 0;
+    el.className = '';
+    el.innerHTML = renderProgram(kamper, d.puljer || []);
+    if (stille) { if (panel) panel.scrollTop = rull; return; }
+    // Hopp til puljen der den søkte spilleren er med.
+    var mine = el.querySelector('.sk-prog-pulje-mine');
+    if (mine && panel) panel.scrollTop += mine.getBoundingClientRect().top - panel.getBoundingClientRect().top - 60;
   }).catch(function() {
+    if (stille) return;
     var el = document.getElementById('sk-prog-innhold');
     if (el) el.innerHTML = '<span style="color:#e94560">Kunne ikke hente kampene</span>';
   });
@@ -2108,45 +2122,70 @@ function erSoktSpiller(navn) {
   return deler.length > 1 ? n.indexOf(deler[0]) !== -1 && n.indexOf(deler[deler.length - 1]) !== -1 : n.indexOf(deler[0]) !== -1;
 }
 
-function renderProgram(kamper) {
+// Puljevis: hver pulje med stilling og kamper i tidsrekkefølge, deretter sluttspillet.
+function renderProgram(kamper, puljer) {
   var dager = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'];
-  var mnd = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
+  function dag(dato) {
+    var p = String(dato || '').split('-');
+    return p.length === 3 ? dager[new Date(+p[0], +p[1] - 1, +p[2]).getDay()] : '';
+  }
+  function navnHtml(sp) {
+    return sp.map(function(s) { return esc(s.navn); }).join(' / ') || '–';
+  }
+  function klubbHtml(sp) {
+    var k = sp.map(function(s) { return s.klubb; }).filter(function(x, i, a) { return x && a.indexOf(x) === i; }).join(' / ');
+    return k ? ' <span class="sk-delt-klubb">' + esc(k) + '</span>' : '';
+  }
+  function erMeg(sp) { return sp.some(function(s) { return erSoktSpiller(s.navn); }); }
   function lag(sp, vant) {
-    var mine = sp.some(function(s) { return erSoktSpiller(s.navn); });
-    var navn = sp.map(function(s) { return esc(s.navn); }).join(' / ') || '–';
-    var klubb = sp.map(function(s) { return s.klubb; }).filter(function(x, i, a) { return x && a.indexOf(x) === i; }).join(' / ');
-    return '<div class="sk-live-sp' + (mine ? ' sk-live-sp-mine' : '') + (vant ? ' sk-res-vinner' : '') + '">' + navn
-      + (klubb ? ' <span class="sk-delt-klubb">' + esc(klubb) + '</span>' : '') + '</div>';
+    return '<div class="sk-live-sp' + (erMeg(sp) ? ' sk-live-sp-mine' : '') + (vant ? ' sk-res-vinner' : '') + '">'
+      + navnHtml(sp) + klubbHtml(sp) + '</div>';
   }
-  var html = '', dag = null, nesteMerket = false;
-  for (var i = 0; i < kamper.length; i++) {
-    var k = kamper[i];
-    if (k.dato !== dag) {
-      dag = k.dato;
-      var p = String(dag).split('-');
-      var dt = p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : null;
-      html += '<div class="sk-live-seksjon">' + (dt ? dager[dt.getDay()] + ' ' + dt.getDate() + '. ' + mnd[dt.getMonth()] : 'Uten tidspunkt') + '</div>';
+
+  // Rekkefølge: puljene slik cup2000 nummererer dem, så sluttspillrundene i den rekkefølgen de spilles.
+  var rekkefolge = [], perRunde = {}, tabell = {};
+  (puljer || []).forEach(function(p) { tabell[p.navn] = p; if (rekkefolge.indexOf(p.navn) === -1) rekkefolge.push(p.navn); });
+  kamper.forEach(function(k) {
+    var r = k.runde || '';
+    if (rekkefolge.indexOf(r) === -1) rekkefolge.push(r);
+    (perRunde[r] = perRunde[r] || []).push(k);
+  });
+
+  var html = '';
+  rekkefolge.forEach(function(r) {
+    var ks = perRunde[r] || [], t = tabell[r];
+    var mine = ks.some(function(k) { return erMeg(k.sp1) || erMeg(k.sp2); }) || (t && t.spillere.some(function(s) { return erMeg(s.sp); }));
+    html += '<div class="sk-prog-pulje' + (mine ? ' sk-prog-pulje-mine' : '') + '">'
+      + '<div class="sk-live-seksjon">' + esc(r || 'Kamper') + '</div>';
+    if (t && t.spillere.length) {
+      html += '<table class="sk-gruppe-tabell sk-prog-tabell"><thead><tr><th>#</th><th>Spiller</th><th>Kamp</th><th>Sett</th></tr></thead><tbody>'
+        + t.spillere.map(function(s) {
+          return '<tr class="' + (erMeg(s.sp) ? 'meg' : '') + '"><td class="pos">' + (s.pos || '') + '</td>'
+            + '<td>' + navnHtml(s.sp) + klubbHtml(s.sp) + '</td>'
+            + '<td class="score">' + s.kV + '-' + s.kT + '</td><td class="score">' + s.sV + '-' + s.sT + '</td></tr>';
+        }).join('') + '</tbody></table>';
     }
-    var spilt = k.sett && k.sett.length;
-    var mine = k.sp1.concat(k.sp2).some(function(s) { return erSoktSpiller(s.navn); });
-    var neste = !spilt && !nesteMerket;
-    if (neste) nesteMerket = true;
-    html += '<div class="sk-live-kamp' + (mine ? ' sk-live-kamp-mine' : '') + (neste ? ' sk-prog-neste' : '') + '">'
-      + '<div class="sk-live-kamp-top">'
-      + '<span class="sk-live-disc">' + esc(k.runde || '') + '</span>'
-      + '<span class="sk-live-tid">' + esc(k.kl || '') + (k.nr ? ' · #' + esc(k.nr) : '') + '</span>'
-      + '</div>'
-      + lag(k.sp1, k.vinner === 1)
-      + lag(k.sp2, k.vinner === 2)
-      + (spilt ? '<div class="sk-res-sett">' + esc(k.sett.join(', ')) + '</div>' : '')
-      + '</div>';
-  }
+    ks.forEach(function(k) {
+      var spilt = k.sett && k.sett.length;
+      html += '<div class="sk-live-kamp' + (erMeg(k.sp1) || erMeg(k.sp2) ? ' sk-live-kamp-mine' : '') + '">'
+        + '<div class="sk-live-kamp-top">'
+        + '<span class="sk-live-disc">' + esc(dag(k.dato)) + ' ' + esc(k.kl || '') + '</span>'
+        + '<span class="sk-live-tid">' + (k.nr ? '#' + esc(k.nr) : '') + '</span>'
+        + '</div>'
+        + lag(k.sp1, k.vinner === 1)
+        + lag(k.sp2, k.vinner === 2)
+        + (spilt ? '<div class="sk-res-sett">' + esc(k.sett.join(', ')) + '</div>' : '')
+        + '</div>';
+    });
+    html += '</div>';
+  });
   return html;
 }
 
 function lukkProgram() {
   var el = document.getElementById('sk-prog-overlay');
   if (el) el.remove();
+  if (_prog && _prog.timer) clearInterval(_prog.timer);
   _prog = null;
 }
 

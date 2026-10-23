@@ -762,6 +762,7 @@ async function handleRequest(request, env) {
       return { navn: t.split(',')[0].trim(), klubb: (t.split(',')[1] || '').trim() };
     });
     const kamper = [];
+    const puljeTabeller = [];
     const leggTil = (m, runde, kart) => {
       if (!Array.isArray(m)) return;
       // idx -1 = ukjent ennå (sluttspill): navnetekst som «Vinder af kamp 62» ligger i m[6]/m[7]
@@ -779,6 +780,11 @@ async function handleRequest(request, env) {
       for (const s of (data[1] || [])) if (Array.isArray(s)) kart[s[0]] = navnFra(s[5]);
       const liste = Array.isArray(data[2]) && Array.isArray(data[2][0]) ? data[2][0] : [];
       for (const m of liste) leggTil(m, navn, kart);
+      // Stilling: [idx, ?, ?, ?, "pos", ["Navn, Klubb", …], spilt, kV, kT, sV, sT, …]
+      const spillere = (data[1] || []).filter(Array.isArray).map(s => ({
+        pos: parseInt(s[4]) || 0, sp: kart[s[0]] || [], kV: s[7] || 0, kT: s[8] || 0, sV: s[9] || 0, sT: s[10] || 0
+      })).sort((a, b) => (a.pos || 99) - (b.pos || 99));
+      if (spillere.length) puljeTabeller.push({ navn, spillere });
     };
     const sluttspill = (data) => {
       const tittel = decEntCup(String(data[0] || '')).trim().replace(/sluttspil\b/i, 'sluttspill') || 'Sluttspill';
@@ -810,8 +816,19 @@ async function handleRequest(request, env) {
         sluttspill(sp.data);
       }
     }
+    // «Vinner av kamp 290» → hvem som spiller kamp 290, så man ser hvem det kan bli.
+    const perNr = {};
+    for (const k of kamper) if (k.nr) perNr[k.nr] = k;
+    for (const k of kamper) for (const side of [k.sp1, k.sp2]) for (const s of side) {
+      const m = s.navn.match(/^Vinner av kamp (\d+)$/i);
+      const ref = m && perNr[m[1]];
+      if (!ref) continue;
+      const lag = sp => sp.map(x => x.navn).join(' / ');
+      s.navn = ref.vinner ? lag(ref.vinner === 1 ? ref.sp1 : ref.sp2) : 'Vinner av ' + lag(ref.sp1) + ' – ' + lag(ref.sp2);
+      if (ref.vinner) s.klubb = (ref.vinner === 1 ? ref.sp1 : ref.sp2).map(x => x.klubb).filter(Boolean).join(' / ');
+    }
     kamper.sort((a, b) => (a.dato + a.kl).localeCompare(b.dato + b.kl) || (parseInt(a.nr) || 0) - (parseInt(b.nr) || 0));
-    return svar({ kamper });
+    return svar({ kamper, puljer: puljeTabeller });
   }
 
   if (path === '/cup2000live') {
