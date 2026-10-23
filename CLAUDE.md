@@ -106,7 +106,7 @@ To separate endepunkt – `/cup2000live` henter begge parallelt og dedupliserer 
 
 Begge: `data[3]` = liste av kamplister, trolig én per spillested/hall. **Les alle**, ikke bare `data[3][0]`, ellers forsvinner
   kamper i hall 2. `/cup2000live` tåler også at `data[3]` selv er kamplisten, og merker «Hall N» når flere lister har kamper.
-  Svaret har `kilder: [{ id, hall, igang, neste, resultater, feil }]`, som appen viser når panelet er tomt.
+  Svaret har `kilder: [{ id, hall, igang, neste, resultater, feil, struktur }]` (feilsøking – se rådata i `/cup2000live`). Appen viser bare en lenke til cup2000 (og «Kunne ikke hente alt» ved feil) når panelet er tomt, ikke tellere eller struktur.
 Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [sp2names...], sp1idx, sp2idx, ...]`
 - `match[0]` = **kampnummer, ikke bane**
 - `match[3]` = køstatus (w=1) eller `"Startet bane 4 11:26"` (o=1) – eneste sted ekte bane finnes

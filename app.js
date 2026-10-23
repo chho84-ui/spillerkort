@@ -1698,18 +1698,18 @@ function visLive(tournamentNavn, modus, ider) {
 }
 
 // Vises når live-panelet er tomt: hvilke cup2000-turneringer som ble spurt, og hva de ga.
+// Vises bare når panelet er tomt: forklarer hvorfor, og lenker til cup2000-siden.
 function liveKildeInfo(data, visning) {
   if (!data) return '';
   if (data.ikkeFunnet) return '<div class="sk-live-kilde">Fant ikke turneringen hos cup2000</div>';
-  return (data.kilder || []).map(function(k) {
+  var kilder = data.kilder || [];
+  if (!kilder.length) return '';
+  var feil = kilder.some(function(k) { return k.feil || k.sesjon === false; });
+  var lenker = kilder.map(function(k) {
     var url = 'https://www.cup2000.dk/turnerings-system/Vis-turneringer/?tournamentid=' + encodeURIComponent(k.id) + '&' + visning;
-    var raa = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx?tournamentid=' + encodeURIComponent(k.id) + '&' + visning;
-    return '<div class="sk-live-kilde">cup2000 #' + esc(k.id) + (k.hall ? ' (' + esc(k.hall) + ')' : '') + ': '
-      + k.igang + ' i gang, ' + k.neste + ' neste, ' + k.resultater + ' resultater' + (k.feil ? ', feil ved henting' : '')
-      + ' · <a href="' + url + '" target="_blank" rel="noopener">åpne</a> · <a href="' + raa + '" target="_blank" rel="noopener">rådata</a>'
-      + (k.valgt ? '<br>Spillested: ' + esc(k.valgt) : '') + (k.sesjon === false ? '<br>Ingen sesjon hos cup2000' : '')
-      + (k.struktur ? '<br><span style="opacity:.6">' + esc(k.struktur) + '</span>' : '') + '</div>';
-  }).join('');
+    return '<a href="' + url + '" target="_blank" rel="noopener">Åpne hos cup2000' + (k.hall ? ' (' + esc(k.hall) + ')' : '') + ' ↗</a>';
+  }).join(' · ');
+  return '<div class="sk-live-kilde">' + (feil ? 'Kunne ikke hente alt fra cup2000. ' : '') + lenker + '</div>';
 }
 
 function renderResultater(innhold, data) {
@@ -1735,7 +1735,7 @@ function renderResultater(innhold, data) {
       + '<div class="sk-res-sett">' + esc((k.sett || []).join(', ')) + '</div>'
       + '</div>';
   }
-  innhold.innerHTML = html + liveKildeInfo(data, 'lr=1');
+  innhold.innerHTML = html;
 }
 
 function renderLiveInnhold(data) {
@@ -1797,7 +1797,7 @@ function renderLiveInnhold(data) {
     html += '<div class="sk-live-seksjon">Neste kamper</div>';
     for (var j = 0; j < koe.length; j++) html += kampKort(koe[j], '');
   }
-  innhold.innerHTML = html + liveKildeInfo(data, 'o=1');
+  innhold.innerHTML = html;
 }
 
 function oppdaterLive(tournamentNavn) {
