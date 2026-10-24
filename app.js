@@ -1046,10 +1046,12 @@ function visTurnering(t) {
     ? ' <button class="sk-live-btn" onclick="visDeltakere(\'' + escAttrJs(t.tournamentId) + '\')">👥 Deltakere</button>'
     : '';
   // Program: badmintonportalen lenker til cup2000 når arrangøren har publisert det.
+  // Kjent fra et tidligere søk (navneoppslag via /cup2000) gjelder også – ellers ville knappen
+  // vekslet mellom Program og Deltakere fra søk til søk.
   var progKnappHtml = '';
-  if (t.cup2000Ider && t.cup2000Ider.length) {
-    _turProgram[t.tournamentId] = { ider: t.cup2000Ider, navn: t.navn || '', mine: t.registreringer || [] };
-    progKnappHtml = '<button class="sk-live-btn" onclick="visProgram(\'' + escAttrJs(t.tournamentId) + '\')">📅 Program</button>';
+  if ((t.cup2000Ider && t.cup2000Ider.length) || _turProgram[t.tournamentId]) {
+    if (t.cup2000Ider && t.cup2000Ider.length) _turProgram[t.tournamentId] = { ider: t.cup2000Ider, navn: t.navn || '', mine: t.registreringer || [] };
+    progKnappHtml = '<button class="sk-live-btn sk-prog-knapp" onclick="visProgram(\'' + escAttrJs(t.tournamentId) + '\')">📅 Program</button>';
   }
   // Med flere knapper får ikke tittel og knapper plass på én linje på mobil.
   // Da får tittelen egen linje og knappene deler raden under.
@@ -1228,7 +1230,7 @@ function visTurnering(t) {
 
       // Portalen lenker ikke alltid til cup2000 (f.eks. Haugerud), men kampprogrammet ble
       // funnet via navneoppslag – da er programmet publisert, og Program erstatter Deltakere.
-      if (!_turProgram[t.tournamentId]) leggTilProgramKnapp(sec, t);
+      if (!sec.querySelector('.sk-prog-knapp')) leggTilProgramKnapp(sec, t);
       // Spillested per klasse i dag (fra live-dataene) – kjøres når kampene er tegnet, se under.
       setTimeout(function() { merkSpillested(sec, _turLive[t.tournamentId]); }, 0);
 
@@ -2084,9 +2086,9 @@ function visProgram(tournamentId) {
 
 // Uten cup2000-ID-er fra portalen: workeren finner turneringen på navn (som /cup2000).
 function leggTilProgramKnapp(sec, t) {
-  _turProgram[t.tournamentId] = { ider: [], navn: t.navn || '', mine: t.registreringer || [] };
+  if (!_turProgram[t.tournamentId]) _turProgram[t.tournamentId] = { ider: [], navn: t.navn || '', mine: t.registreringer || [] };
   var btn = document.createElement('button');
-  btn.className = 'sk-live-btn';
+  btn.className = 'sk-live-btn sk-prog-knapp';
   btn.textContent = '📅 Program';
   btn.onclick = function() { visProgram(t.tournamentId); };
   var delt = sec.querySelector('.sk-sek-banner button[onclick^="visDeltakere("]');
