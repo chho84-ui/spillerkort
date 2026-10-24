@@ -1014,6 +1014,10 @@ async function handleRequest(request, env) {
       const alle = [...raaIgang, ...raaKoe, ...raaSiste];
       const flereGrupper = new Set(alle.map(x => x.gruppe)).size > 1;
       const hallFor = gi => [hallNavn[id], sted, flereGrupper ? 'Hall ' + (gi + 1) : ''].filter(Boolean).join(' · ');
+      // Spillestedet for hver kamp (også når turneringen bare har ett), så appen kan vise hvor
+      // hver klasse spiller i dag – f.eks. U19 i Haugerudhallen og U15 i Oppsal Arena.
+      const si0 = stedInfo[id] || {};
+      const stedet = sted || String(((si0.steder || [])[0] || [])[1] || si0.standard || '').replace(/\s*\(.*\)\s*$/, '').trim();
       const seddeKampnr = seddePerId[id].live, seddeRes = seddePerId[id].res;
 
       for (const { gruppe, match } of raaIgang) {
@@ -1021,7 +1025,7 @@ async function handleRequest(request, env) {
         if (seddeKampnr.has(k.kampnr)) continue;
         // match[3] = "Startet bane 4 11:26"
         const baneM = decEnt2(String(match[3] || '')).match(/bane\s+(\S+)\s+(\d{1,2}:\d{2})/i);
-        kamper2.push({ ...k, hall: hallFor(gruppe), status: 'live', bane: baneM ? baneM[1] : '', startet: baneM ? baneM[2] : '' });
+        kamper2.push({ ...k, hall: hallFor(gruppe), sted: stedet, status: 'live', bane: baneM ? baneM[1] : '', startet: baneM ? baneM[2] : '' });
         seddeKampnr.add(k.kampnr);
       }
       for (const { gruppe, match } of raaKoe) {
@@ -1031,7 +1035,7 @@ async function handleRequest(request, env) {
         const statusRaw = decEnt2(String(match[3] || '')).trim();
         const foerM = statusRaw.match(/(\d+)/);
         const status = statusRaw.toUpperCase() === 'NÆSTE KAMP' ? 'next' : (foerM ? parseInt(foerM[1]) : 'next');
-        kamper2.push({ ...k, hall: hallFor(gruppe), status, bane: '', startet: '' });
+        kamper2.push({ ...k, hall: hallFor(gruppe), sted: stedet, status, bane: '', startet: '' });
         seddeKampnr.add(k.kampnr);
       }
       // match[3] = score "12/15 8/15" (sp1/sp2 per sett), match[5] = vinner (1/2)
@@ -1041,7 +1045,7 @@ async function handleRequest(request, env) {
         seddeRes.add(k.kampnr);
         const sett = String(match[3] || '').trim().split(/\s+/).filter(Boolean).map(s => s.replace('/', '-'));
         const vinner = match[5] === 1 || match[5] === 2 ? match[5] : 0;
-        resultater.push({ ...k, hall: hallFor(gruppe), sett, vinner });
+        resultater.push({ ...k, hall: hallFor(gruppe), sted: stedet, sett, vinner });
       }
     });
 

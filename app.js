@@ -1061,7 +1061,7 @@ function visTurnering(t) {
   // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
   // Svaret har også spillestedene, som vises under banneret.
   if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(','))
-    .then(function(d) { visSpillested(sec, d); }).catch(function() {});
+    .then(function(d) { _turLive[t.tournamentId] = d; merkSpillested(sec, d); }).catch(function() {});
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
@@ -1229,6 +1229,8 @@ function visTurnering(t) {
       // Portalen lenker ikke alltid til cup2000 (f.eks. Haugerud), men kampprogrammet ble
       // funnet via navneoppslag – da er programmet publisert, og Program erstatter Deltakere.
       if (!_turProgram[t.tournamentId]) leggTilProgramKnapp(sec, t);
+      // Spillested per klasse i dag (fra live-dataene) – kjøres når kampene er tegnet, se under.
+      setTimeout(function() { merkSpillested(sec, _turLive[t.tournamentId]); }, 0);
 
       // Sorter kamper etter tidspunkt
       kamper.sort(function(a, b) {
@@ -1314,9 +1316,10 @@ function visTurnering(t) {
             var _d = parseInt(_dp[0]), _mo = parseInt(_dp[1]);
             var _dt = new Date(new Date().getFullYear(), _mo - 1, _d);
             var _dagNavn = _dager[_dt.getDay()] + ' ' + _d + '. ' + _mndK[_mo - 1];
-            kh += '<div class="sk-dag-sep">' + _dagNavn + '</div>';
+            kh += '<div class="sk-dag-sep" data-dato="' + tidDato + '" data-klasse="' + esc(groupKey) + '">' + _dagNavn + '</div>';
           }
-          kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + (k.sluttspill ? ' sk-kamp-sluttspill' : '') + '">'
+          kh += '<div class="sk-kamp' + (ki === nextKampIdx ? ' sk-kamp-next' : '') + (k.sluttspill ? ' sk-kamp-sluttspill' : '') + '"'
+            + ' data-dato="' + esc(tidDato || '') + '" data-klasse="' + esc(groupKey) + '" data-kampnr="' + esc(k.bane || '') + '">'
             + '<span class="sk-kamp-tid">' + tidKl + '</span>'
             + '<span class="sk-kamp-bane">' + esc(k.bane || '') + '</span>'
             + '<span class="sk-kamp-mot" id="sk-mot-' + t.tournamentId + '-' + ki + '">'
@@ -1655,20 +1658,72 @@ var LIVE_TTL = 30 * 1000; // 30 sek cache for live-data
 // ider: kommaseparerte cup2000-ID-er (standard: de til åpent panel). fersk: hopp over cache (↻).
 // Pågående henting for samme nøkkel gjenbrukes, så forhåndshenting og trykk på knappen ikke dobler kallet.
 var _liveVenter = {};
-// «📍 Haugerudhallen» under turneringsbanneret, med kartlenke. Flere haller/spillesteder vises etter hverandre.
-function visSpillested(sec, data) {
-  var steder = [];
-  ((data && data.kilder) || []).forEach(function(k) {
-    (k.steder || []).forEach(function(n) { if (n && steder.indexOf(n) === -1) steder.push(n); });
+var _turLive = {};
+
+function idagDDMM() {
+  var d = new Date();
+  return String(d.getDate()).padStart(2, '0') + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+// Hvor kampene spilles. Cup2000 oppgir spillested per kamp i live-dataene (dagens kø, pågående
+// og ferdige kamper). Én turnering kan bruke flere haller samme dag (f.eks. U19 i Haugerudhallen,
+// U15 i Oppsal Arena), så stedet vises på dagsskillet i hver klasse: først via kampnummer, ellers
+// via klassen (gren + aldersklasse). Har turneringen bare ett sted, står det under banneret.
+function merkSpillested(sec, data) {
+  if (!sec || !data) return;
+  var perNr = {}, perKlasse = {}, perAlder = {}, alle = [];
+  function ag(s) { var m = String(s || '').toUpperCase().match(/U\d+|SENIOR|JUNIOR/); return m ? m[0] : ''; }
+  (data.kamper || []).concat(data.resultater || []).forEach(function(k) {
+    if (!k.sted) return;
+    if (k.kampnr) perNr[k.kampnr] = k.sted;
+    var key = (k.disc || '') + '|' + ag(k.ageGroup || k.discFull);
+    (perKlasse[key] = perKlasse[key] || []).indexOf(k.sted) === -1 && perKlasse[key].push(k.sted);
+    var a = ag(k.ageGroup || k.discFull);
+    (perAlder[a] = perAlder[a] || []).indexOf(k.sted) === -1 && perAlder[a].push(k.sted);
+    if (alle.indexOf(k.sted) === -1) alle.push(k.sted);
   });
-  var banner = sec.querySelector('.sk-sek-banner');
-  if (!steder.length || !banner || sec.querySelector('.sk-tur-sted')) return;
-  var el = document.createElement('div');
-  el.className = 'sk-tur-sted';
-  el.innerHTML = '📍 ' + steder.map(function(n) {
+  ((data.kilder) || []).forEach(function(k) {
+    (k.steder || []).forEach(function(n) { if (n && alle.indexOf(n) === -1 && !Object.keys(perNr).length) alle.push(n); });
+  });
+  function kart(n) {
     return '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n) + '" target="_blank" rel="noopener">' + esc(n) + '</a>';
-  }).join(' · ');
-  banner.parentNode.insertBefore(el, banner.nextSibling);
+  }
+  var banner = sec.querySelector('.sk-sek-banner');
+  if (alle.length === 1 && banner && !sec.querySelector('.sk-tur-sted')) {
+    var el = document.createElement('div');
+    el.className = 'sk-tur-sted';
+    el.innerHTML = '📍 ' + kart(alle[0]);
+    banner.parentNode.insertBefore(el, banner.nextSibling);
+    return;
+  }
+  if (alle.length < 2) return;
+  var idag = idagDDMM();
+  // Kampene ligger i turneringens innhold (div.sk-t), som kommer rett etter banneret (sec).
+  var innhold = sec.nextElementSibling && sec.nextElementSibling.classList.contains('sk-t') ? sec.nextElementSibling : sec;
+  var seps = innhold.querySelectorAll('.sk-dag-sep[data-dato="' + idag + '"]');
+  for (var i = 0; i < seps.length; i++) {
+    var sep = seps[i];
+    if (sep.querySelector('.sk-dag-sted')) continue;
+    var klasse = sep.getAttribute('data-klasse') || '';
+    var steder = [];
+    var rader = sep.parentNode.querySelectorAll('.sk-kamp[data-dato="' + idag + '"]');
+    for (var r = 0; r < rader.length; r++) {
+      if (rader[r].getAttribute('data-klasse') !== klasse) continue;
+      var st = perNr[rader[r].getAttribute('data-kampnr')];
+      if (st && steder.indexOf(st) === -1) steder.push(st);
+    }
+    // Ingen av dagens kamper i live-dataene: bruk klassen (gren + alder), ellers hele aldersklassen.
+    if (!steder.length) {
+      var p = klasse.split('|');
+      steder = perKlasse[p[0] + '|' + ag(p[1])] || perAlder[ag(p[1])] || [];
+    }
+    if (steder.length === 1) {
+      var span = document.createElement('span');
+      span.className = 'sk-dag-sted';
+      span.innerHTML = ' · 📍 ' + kart(steder[0]);
+      sep.appendChild(span);
+    }
+  }
 }
 
 function cup2000LiveApi(tournamentNavn, fersk, ider) {

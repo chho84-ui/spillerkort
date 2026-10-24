@@ -106,7 +106,7 @@ To separate endepunkt – `/cup2000live` henter begge parallelt og dedupliserer 
 
 Begge: `data[3]` = liste av kamplister, trolig én per spillested/hall. **Les alle**, ikke bare `data[3][0]`, ellers forsvinner
   kamper i hall 2. `/cup2000live` tåler også at `data[3]` selv er kamplisten, og merker «Hall N» når flere lister har kamper.
-  Svaret har `kilder: [{ id, hall, steder, igang, neste, resultater, feil, struktur }]` – `steder` (spillestedsnavn fra `data[6]`, uten parentes) vises som «📍 Haugerudhallen» med kartlenke under turneringsbanneret (`visSpillested`) for pågående turneringer (feilsøking – se rådata i `/cup2000live`). Appen viser bare en lenke til cup2000 (og «Kunne ikke hente alt» ved feil) når panelet er tomt, ikke tellere eller struktur.
+  Svaret har `kilder: [{ id, hall, steder, igang, neste, resultater, feil, struktur }]` – `steder` = spillestedsnavn fra `data[6]` (uten parentes). Hver kamp i `kamper`/`resultater` har `sted`. `merkSpillested()` viser «📍 Oppsal Arena» med kartlenke på dagens dagsskille i hver klasse (via kampnummer, ellers gren+alder, ellers aldersklasse), fordi én turnering kan bruke flere haller samme dag. Bare ett sted → linjen står under turneringsbanneret i stedet. Kampene ligger i `div.sk-t` rett etter banneret (`sec`), ikke inni det (feilsøking – se rådata i `/cup2000live`). Appen viser bare en lenke til cup2000 (og «Kunne ikke hente alt» ved feil) når panelet er tomt, ikke tellere eller struktur.
 Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [sp2names...], sp1idx, sp2idx, ...]`
 - `match[0]` = **kampnummer, ikke bane**
 - `match[3]` = køstatus (w=1) eller `"Startet bane 4 11:26"` (o=1) – eneste sted ekte bane finnes
