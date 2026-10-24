@@ -1059,7 +1059,9 @@ function visTurnering(t) {
     ? '<div class="sk-sek-banner sk-tur-banner-full"><h3>' + tittel + '</h3><div class="sk-banner-knapper">' + knapper + '</div></div>'
     : '<div class="sk-sek-banner"><h3>' + tittel + '</h3>' + knapper + '</div>';
   // Pågående turnering: hent live-data i bakgrunnen, så Live/Resultater åpner uten venting.
-  if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(',')).catch(function() {});
+  // Svaret har også spillestedene, som vises under banneret.
+  if (liveKnappHtml) cup2000LiveApi(t.navn || '', false, (t.cup2000Ider || []).join(','))
+    .then(function(d) { visSpillested(sec, d); }).catch(function() {});
   res.appendChild(sec);
   var div = document.createElement('div');
   div.className = 'sk-t';
@@ -1653,6 +1655,22 @@ var LIVE_TTL = 30 * 1000; // 30 sek cache for live-data
 // ider: kommaseparerte cup2000-ID-er (standard: de til åpent panel). fersk: hopp over cache (↻).
 // Pågående henting for samme nøkkel gjenbrukes, så forhåndshenting og trykk på knappen ikke dobler kallet.
 var _liveVenter = {};
+// «📍 Haugerudhallen» under turneringsbanneret, med kartlenke. Flere haller/spillesteder vises etter hverandre.
+function visSpillested(sec, data) {
+  var steder = [];
+  ((data && data.kilder) || []).forEach(function(k) {
+    (k.steder || []).forEach(function(n) { if (n && steder.indexOf(n) === -1) steder.push(n); });
+  });
+  var banner = sec.querySelector('.sk-sek-banner');
+  if (!steder.length || !banner || sec.querySelector('.sk-tur-sted')) return;
+  var el = document.createElement('div');
+  el.className = 'sk-tur-sted';
+  el.innerHTML = '📍 ' + steder.map(function(n) {
+    return '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(n) + '" target="_blank" rel="noopener">' + esc(n) + '</a>';
+  }).join(' · ');
+  banner.parentNode.insertBefore(el, banner.nextSibling);
+}
+
 function cup2000LiveApi(tournamentNavn, fersk, ider) {
   ider = ider === undefined ? _liveIder : ider;
   var key = 'live:' + tournamentNavn + '|' + ider;

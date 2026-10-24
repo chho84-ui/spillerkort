@@ -1049,7 +1049,10 @@ async function handleRequest(request, env) {
       const mine = enheter.filter(e => e.id === id);
       const tell = i => mine.reduce((sum, e) => sum + ((e.res[i] && e.res[i].kamper.length) || 0), 0);
       const si = stedInfo[id] || {};
-      kilder.push({ id, hall: hallNavn[id] || '', igang: tell(0), neste: tell(1), resultater: tell(2),
+      // Spillestedene (f.eks. «Haugerudhallen»), uten cup2000s parentes-tillegg – appen viser dem i turneringsbanneret.
+      const stedNavn = [...new Set(((si.steder && si.steder.length) ? si.steder.map(x => x[1]) : [si.standard])
+        .filter(Boolean).map(n => String(n).replace(/\s*\(.*\)\s*$/, '').trim()).filter(Boolean))];
+      kilder.push({ id, hall: hallNavn[id] || '', steder: stedNavn, igang: tell(0), neste: tell(1), resultater: tell(2),
         sesjon: !!sesjoner[id],
         valgt: si.steder && si.steder.length > 1 ? si.steder.length + ' spillesteder' + (si.dato ? ', ' + si.dato : '') : si.standard,
         feil: mine.some(e => e.res.some(x => x === null)),
