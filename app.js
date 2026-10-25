@@ -1675,8 +1675,12 @@ function merkSpillested(sec, data) {
   if (!sec || !data) return;
   var perNr = {}, perKlasse = {}, perAlder = {}, alle = [];
   function ag(s) { var m = String(s || '').toUpperCase().match(/U\d+|SENIOR|JUNIOR/); return m ? m[0] : ''; }
+  // Bare dagens kamper: «Siste resultater» kan inneholde gårsdagens kamper fra en annen hall.
+  var idagNokkel = idagDDMM();
   (data.kamper || []).concat(data.resultater || []).forEach(function(k) {
     if (!k.sted) return;
+    var dm = String(k.tid || '').match(/^(\d{2}-\d{2})\s/);
+    if (dm && dm[1] !== idagNokkel) return;
     if (k.kampnr) perNr[k.kampnr] = k.sted;
     var key = (k.disc || '') + '|' + ag(k.ageGroup || k.discFull);
     (perKlasse[key] = perKlasse[key] || []).indexOf(k.sted) === -1 && perKlasse[key].push(k.sted);
