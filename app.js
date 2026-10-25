@@ -1059,9 +1059,11 @@ function hentSluttresultat(t) {
             rankTekst = (rankTekst || '').trim(); poengTekst = (poengTekst || '').trim();
             // Ny rad med plass = ny spiller/par; rad uten plass = makker i samme par
             if (rankTekst) { sistePlass = rankTekst; sistePoeng = poengTekst; }
-            var link = playerCell.querySelector('a[href*="VisSpiller"]');
-            var erMeg = (link && (link.getAttribute('href') || '').indexOf('VisSpiller/#' + pid) !== -1)
-              || (playerCell.textContent || '').toLowerCase().indexOf(SN.toLowerCase()) !== -1;
+            // Double/mix: begge spillerne står i samme celle, én lenke hver – sjekk alle, ikke bare den første.
+            var erMeg = [].some.call(playerCell.querySelectorAll('a[href*="VisSpiller"]'), function(a) {
+              var m = (a.getAttribute('href') || '').match(/VisSpiller\/#(\d+)/);
+              return m && m[1] === pid;
+            }) || (playerCell.textContent || '').replace(/\s+/g, ' ').toLowerCase().indexOf(String(SN || '').replace(/\s+/g, ' ').toLowerCase()) !== -1;
             if (!erMeg) return;
             blokk.plass = sistePlass;
             blokk.poeng = rankTekst ? poengTekst : sistePoeng;
