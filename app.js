@@ -1031,11 +1031,18 @@ function hentSluttresultat(t) {
   var pid = String(SI);
   // Grener spilleren er påmeldt ("Damesingle", "Mixeddouble" …); tom liste = alle grener.
   var paameldt = (t.registreringer || []).map(function(r) { return (r.disiplin || '').toLowerCase(); });
-  return Promise.all(t.klasser.map(function(kl) {
+  // Arrangøren kan flytte grener til en annen klasse enn spilleren meldte seg på i (Haugerud: doublene
+  // i U15 X, påmeldt i U15 A). Turneringens øvrige klasser sjekkes derfor også, men der tas bare
+  // grener med der spilleren faktisk står på resultatlista.
+  var mine = {};
+  (t.klasser || []).forEach(function(kl) { mine[String(kl.id)] = true; });
+  var andre = (t.alleKlasser || []).filter(function(kl) { return kl && kl.id && !mine[String(kl.id)]; });
+  return Promise.all((t.klasser || []).concat(andre).map(function(kl) {
+    var egen = !!mine[String(kl.id)];
     return api('SearchTournamentResults', {
       tournamentclassid: parseInt(kl.id),
       clientselectfunction: 'SelectTournamentClass1'
-    }, true).then(function(res) {
+    }, egen).then(function(res) {
       var html = String((res.d && res.d.Html) || '');
       if (!html) return null;
       var doc2 = new DOMParser().parseFromString(html, 'text/html');
@@ -1070,7 +1077,7 @@ function hentSluttresultat(t) {
           });
         }
         var discL = disc.toLowerCase();
-        var aktuell = blokk.plass || !paameldt.length || paameldt.some(function(p) { return p && (p.indexOf(discL) !== -1 || discL.indexOf(p) !== -1); });
+        var aktuell = blokk.plass || egen && (!paameldt.length || paameldt.some(function(p) { return p && (p.indexOf(discL) !== -1 || discL.indexOf(p) !== -1); }));
         if (aktuell) blokker.push(blokk);
       });
       // Spillerens kamper i hver aktuell gren (seier/tap), også når hun ikke fikk plassering
