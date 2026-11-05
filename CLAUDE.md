@@ -200,7 +200,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 ```js
 {
   tournamentId, navn, dato, dager, cup2000Url,
-  registreringer: [{ disiplin, bekreftet, makkere, ageGroup }],
+  registreringer: [{ disiplin, bekreftet, makkere, ageGroup, klasse }],  // klasse = «U15 A», vises med liten skrift etter grenen
   klasser: [{ id, name }]
 }
 ```

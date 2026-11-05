@@ -828,7 +828,7 @@ function sjekkTurnering(tid, info) {
       var cupM = html.match(/cup2000\.dk[^\s"']*/i);
       if (cupM && !info.cup2000Url) info.cup2000Url = 'https://' + cupM[0];
       klasserMedSpiller.push(kl);
-      return parseKlasse(html, ageGroup);
+      return parseKlasse(html, ageGroup, klasseNavn);
     }).catch(function() { info.feilet = true; return []; });
   })).then(function(alleRegs) {
     if (info.feilet) _turFeilet++;
@@ -841,7 +841,8 @@ function sjekkTurnering(tid, info) {
   });
 }
 
-function parseKlasse(html, ageGroup) {
+// klasse = hele klassenavnet fra portalen (f.eks. «U15 A»), vises etter grenen.
+function parseKlasse(html, ageGroup, klasse) {
   ageGroup = ageGroup || '';
   var results = [];
   var dp = new DOMParser();
@@ -884,7 +885,7 @@ function parseKlasse(html, ageGroup) {
         || candidateRows.find(function(c) { return !c.isXmakker; })
         || candidateRows[0];
       var makkere = best.isXmakker && !best.makkere.length ? [{ navn: 'X-makker', klubb: '' }] : best.makkere;
-      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: best.tr.innerHTML.indexOf('checkmark.gif') !== -1, ageGroup: ageGroup });
+      results.push({ disiplin: disiplin, makkere: makkere, bekreftet: best.tr.innerHTML.indexOf('checkmark.gif') !== -1, ageGroup: ageGroup, klasse: klasse || '' });
     }
   }
   return results;
@@ -1181,7 +1182,7 @@ function visTurnering(t) {
     }
     rh += '<div class="sk-row">'
       + '<span class="sk-bk' + (r.bekreftet ? ' ok' : '') + '">' + (r.bekreftet ? 'OK' : '?') + '</span>'
-      + '<span class="sk-disc">' + esc(r.disiplin) + '</span>'
+      + '<span class="sk-disc">' + esc(r.disiplin) + (r.klasse ? ' <span class="sk-reg-klasse">' + esc(r.klasse) + '</span>' : '') + '</span>'
       + makkerHtml
       + '</div>'
       + '<div id="sk-kl-' + t.tournamentId + '-' + i + '" class="sk-kamplist">'
