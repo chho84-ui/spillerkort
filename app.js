@@ -663,22 +663,23 @@ function finnTurneringer() {
       var fristParts = fristTekst.split('.');
       var turAar = parseInt(fristParts[2]) || new Date().getFullYear();
       var ukeNr = parseInt(tds2[1] ? tds2[1].textContent.trim() : '0');
+      // Frist i høst, turnering tidlig på året (f.eks. frist 15.12, uke 2): turneringen er året etter.
+      if (ukeNr && ukeNr < 10 && parseInt(fristParts[1]) >= 10) turAar++;
       var startDagM = dagerTekst.match(/(\d+)/);
       var startDag = startDagM ? parseInt(startDagM[1]) : 1;
       // Finn dato fra ukenummer (ISO: uke 1 = uke med første torsdag)
       var jan4 = new Date(turAar, 0, 4);
       var startOfWeek1 = new Date(jan4);
       startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
-      var turDato = new Date(startOfWeek1);
-      turDato.setDate(startOfWeek1.getDate() + (ukeNr - 1) * 7);
-      // Juster til riktig ukedag basert på startdag i måneden
-      // Finn mandag i uke ukeNr, og match startDag
-      var mnd = turDato.getMonth() + 1;
-      var aar = turDato.getFullYear();
-      // Hvis startDag ikke stemmer med beregnet dato, bruk nærmeste dato med riktig dag
-      turDato.setDate(startDag);
-      // Sjekk at måneden er rimelig (kan være off-by-one ved ukeoverganger)
-      if (Math.abs(turDato.getMonth() + 1 - mnd) > 1) turDato.setMonth(mnd - 1);
+      var mandag = new Date(startOfWeek1);
+      mandag.setDate(startOfWeek1.getDate() + (ukeNr - 1) * 7);
+      // Startdagen er dagen i uka (man–søn) med riktig dagnummer. Å sette dagnummeret i mandagens
+      // måned ga feil måned når uka starter i forrige måned (uke 49: man 30. nov, «05.» = 5. des).
+      var turDato = new Date(mandag);
+      for (var ud = 0; ud < 7; ud++) {
+        var kand = new Date(mandag); kand.setDate(mandag.getDate() + ud);
+        if (kand.getDate() === startDag) { turDato = kand; break; }
+      }
       kmap[tid2].dato = String(startDag).padStart(2,'0') + '.' + String(turDato.getMonth()+1).padStart(2,'0') + '.' + turDato.getFullYear();
       kmap[tid2].dager = dagerTekst;
       kmap[tid2].navn = tds2[3] ? tds2[3].textContent.trim() : trs2[i].textContent.replace(/\s+/g, ' ').trim().substring(0, 80);
@@ -709,6 +710,8 @@ function finnTurneringer() {
       var endDate = new Date(year, month + (endDay < startDag ? 1 : 0), endDay);
       var startDate = new Date(year, month, startDag);
       kmap[tid].isPast = (endDate < today);
+      kmap[tid].startTid = startDate.getTime();
+      kmap[tid].sluttTid = endDate.getTime();
       kmap[tid].kanHaResultat = (endDate <= today);
       kmap[tid].harStartet = (startDate <= today);
       return endDate >= cutoff;
@@ -748,9 +751,12 @@ function finnTurneringer() {
       aktive.forEach(function(t) { aktiveTids[t.tournamentId] = true; });
       var sjekkdeTids = {};
       tids.forEach(function(tid) { sjekkdeTids[tid] = true; });
+      // Lagrede turneringer brukes bare innenfor samme vindu (7 dager etter siste spilledag),
+      // aldri for å forlenge det – ellers ble visningen ulik fra enhet til enhet.
       Object.keys(lagrede).forEach(function(tid) {
         if (!aktiveTids[tid] && !sjekkdeTids[tid]) {
           var lt = lagrede[tid];
+          if (!lt.sluttTid || lt.sluttTid < cutoff.getTime()) return;
           lt.isPast = true;
           lt.kanHaResultat = true;
           lt.harStartet = true;
@@ -831,7 +837,7 @@ function sjekkTurnering(tid, info) {
       for (var j = 0; j < alleRegs[i].length; j++) regs.push(alleRegs[i][j]);
     }
     if (!regs.length) return null;
-    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, cup2000Ider: info.cup2000Ider || [], klasser: klasserMedSpiller, alleKlasser: info.klasser || [], isPast: !!info.isPast, harStartet: !!info.harStartet, kanHaResultat: !!info.kanHaResultat };
+    return { tournamentId: tid, registreringer: regs, navn: info.navn, dato: info.dato, dager: info.dager, cup2000Url: info.cup2000Url, cup2000Ider: info.cup2000Ider || [], klasser: klasserMedSpiller, alleKlasser: info.klasser || [], isPast: !!info.isPast, harStartet: !!info.harStartet, kanHaResultat: !!info.kanHaResultat, startTid: info.startTid, sluttTid: info.sluttTid };
   });
 }
 
@@ -2844,6 +2850,18 @@ function aapneMotstander(navn, klubb) {
   setTimeout(hent, 0);
 }
 
+// Pågående først, så kommende (nærmeste først), så nylig spilte (nyeste først).
+// Uten sortering kom de i turnerings-ID-rekkefølge, og lagrede turneringer alltid nederst.
+function sorterTurneringer(liste) {
+  function gruppe(t) { return t.isPast ? 2 : (t.harStartet ? 0 : 1); }
+  return liste.slice().sort(function(a, b) {
+    var ga = gruppe(a), gb = gruppe(b);
+    if (ga !== gb) return ga - gb;
+    if (ga === 2) return (b.sluttTid || 0) - (a.sluttTid || 0);
+    return (a.startTid || Infinity) - (b.startTid || Infinity);
+  });
+}
+
 function hent() {
   SN = document.getElementById('f-navn').value.trim();
   SK = document.getElementById('f-klubb').value.trim();
@@ -2885,7 +2903,16 @@ function hent() {
       if (!d[1].length) {
         sett('Ingen kommende turneringer funnet.');
       } else {
-        d[1].forEach(visTurnering);
+        sorterTurneringer(d[1]).forEach(function(t, i, liste) {
+          // Ferdige turneringer samles nederst under en egen overskrift.
+          if (t.isPast && (i === 0 || !liste[i - 1].isPast)) {
+            var hdr = document.createElement('div');
+            hdr.className = 'sk-nylig-hdr';
+            hdr.textContent = 'Nylig spilt';
+            document.getElementById('resultat').appendChild(hdr);
+          }
+          visTurnering(t);
+        });
       }
       if (_turFeilet) {
         var st = document.getElementById('st');

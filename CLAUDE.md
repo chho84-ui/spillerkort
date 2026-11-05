@@ -166,6 +166,7 @@ Kamp: `[kampnr, ?, "HH:MM DD-MM-YYYY", statusStr, discFull, 0, [sp1names...], [s
 |----------|-------------|
 | `hent()` | Hovedfunksjon – søker opp spiller og viser alt |
 | `visTurnering(t)` | Renderer én turnering med kamper og gruppe-knapp |
+| `sorterTurneringer(liste)` | Rekkefølgen i søkeresultatet: pågående, kommende (nærmeste først), så «Nylig spilt» (nyeste først, egen overskrift `.sk-nylig-hdr`). Bygger på `startTid`/`sluttTid` fra `finnTurneringer()`. Ferdige turneringer vises i 7 dager etter siste spilledag – også de som hentes fra `localStorage` (`tur:<navn>|<klubb>`), som aldri forlenger vinduet. Startdato regnes ut fra ukenummer + dagnummer (dagen i uka med riktig dagnummer; år +1 når fristen er i høst og uka < 10) |
 | `hentSluttresultat(t)` / `sluttresultatHtml(alle)` | Plassering, poeng og seier–tap per gren fra badmintonportalen (`SearchTournamentResults`, `fersk` for spillerens egne klasser). Sjekker også turneringens øvrige klasser (`t.alleKlasser`), fordi arrangøren kan flytte grener (Haugerud: doublene i U15 X, påmeldt i U15 A) – der tas bare grener med der spilleren står på lista. I double/mix står begge spillerne i samme `td.player`; alle lenkene sjekkes på spiller-ID. Vises over cup2000-kampene når `t.kanHaResultat` (siste dag eller ferdig) og portalen har publisert plassering (`.sk-sluttres`), og alene for ferdige turneringer uten cup2000-kamper |
 | `cup2000Api(navn, url)` | Henter kampprogram fra `/cup2000` (2 min cache) |
 | `cup2000LiveApi(navn)` | Henter live-oversikt fra `/cup2000live` (30 sek cache) |
