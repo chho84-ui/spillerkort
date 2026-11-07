@@ -2149,7 +2149,8 @@ function visProgramCup(cupId, tittel) {
 function aapneProgram(ider, tittel, mine) {
   lukkProgram();
   _prog = { ider: ider, klasser: [], valgt: 0, mine: mine || [] };
-  var sporring = ider.length ? { cup2000Ider: ider } : { tournamentNavn: tittel };
+  // Navnet sendes alltid: portalen lenker ikke alltid til alle delene av en delt turnering.
+  var sporring = { cup2000Ider: ider, tournamentNavn: tittel };
   var overlay = document.createElement('div');
   overlay.className = 'sk-gruppe-overlay';
   overlay.id = 'sk-prog-overlay';

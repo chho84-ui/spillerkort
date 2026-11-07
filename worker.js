@@ -36,6 +36,24 @@ function json(data, status) {
   });
 }
 
+// Alle cup2000-turneringer som passer navnet. Én turnering hos badmintonportalen kan være delt i flere
+// hos cup2000 (f.eks. Vestlandsmesterskapet: U11/U13 for seg), så første treff er ikke nok.
+async function finnCup2000IderPaaNavn(tournamentNavn) {
+  if (!tournamentNavn) return [];
+  const listHtml = await (await fetch('https://www.cup2000.dk/turnerings-system/Vis-turneringer/', {
+    headers: { 'User-Agent': 'Mozilla/5.0' }
+  })).text();
+  const normStr = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/g, '&').replace(/^[^:]+:\s*/, '').toLowerCase().replace(/[-\s]+/g, ' ').trim();
+  const navnNorm = normStr(String(tournamentNavn));
+  if (!navnNorm) return [];
+  const ider = [];
+  for (const m of listHtml.matchAll(/onclick="selectTournament\((\d+)\)"[^>]*>.*?<td>(\d+)<\/td><td>[^<]*<\/td><td>([^<]+)<\/td>/gs)) {
+    const rowName = normStr(m[3]);
+    if ((rowName.includes(navnNorm) || navnNorm.includes(rowName.split(' ').slice(-3).join(' '))) && !ider.includes(m[1])) ider.push(m[1]);
+  }
+  return ider.slice(0, 4);
+}
+
 async function finnCup2000Id(body) {
   let cup2000Id = null;
   if (body.cup2000Url) {
@@ -74,7 +92,7 @@ async function hentCup2000Klasser(cup2000Id) {
   if (typeof navJson.data === 'string') {
     // renderMethod 1: HTML med klasse-lenker
     for (const row of navJson.data.matchAll(/<tr[^>]*><td>([^<]*)<\/td><td>(.*?)<\/td><\/tr>/gs)) {
-      const ag = row[1].replace(/&nbsp;/g, '').trim();
+      const ag = decEntCup(row[1].replace(/&nbsp;/g, '')).trim();   // «&#197;pen HC» → «Åpen HC»
       if (!ag || ag === 'Klasser') continue;
       for (const lm of row[2].matchAll(/c=(\d+)&(?:amp;)?e=(\d+)"[^>]*>([^<]+)<\/a>/g)) {
         classes.push({ c: lm[1], e: lm[2], disc: lm[3].trim(), ageGroup: ag });
@@ -351,6 +369,23 @@ async function handleRequest(request, env) {
     // Steg 1: Finn cup2000 tournamentId — prøv URL først, deretter navnematching
     const cup2000Id = await finnCup2000Id(body);
     if (!cup2000Id) return json({ kamper: [] });
+
+    // Finner vi ikke spilleren i den første turneringen, prøves de andre som passer navnet
+    // (delt turnering, f.eks. U11/U13 i en egen cup2000-turnering uten lenke fra portalen).
+    if (!body._kandidat && body.tournamentNavn) {
+      const kjor = id => handleRequest(new Request(request.url, { method: 'POST',
+        body: JSON.stringify({ ...body, cup2000Url: 'tournamentid=' + id, _kandidat: true }) }), env);
+      const forste = await kjor(cup2000Id);
+      const d1 = await forste.clone().json().catch(() => ({}));
+      if (d1.kamper && d1.kamper.length) return forste;
+      const andre = (await finnCup2000IderPaaNavn(body.tournamentNavn).catch(() => [])).filter(x => x !== String(cup2000Id));
+      for (const id of andre.slice(0, 2)) {
+        const svar = await kjor(id);
+        const d = await svar.clone().json().catch(() => ({}));
+        if (d.kamper && d.kamper.length) return svar;
+      }
+      return forste;
+    }
 
     const BASE = 'https://www.cup2000.dk/Publisher/SearchTournamentsService.aspx';
     const UA = { 'User-Agent': 'Mozilla/5.0' };
@@ -721,10 +756,11 @@ async function handleRequest(request, env) {
     const tall = v => String(v == null ? '' : v).replace(/\D/g, '');
     const ider = [...new Set((body.cup2000Ider || []).map(tall).filter(Boolean))].slice(0, 3);
     const id = tall(body.id), c = tall(body.c), e = tall(body.e);
-    // Portalen lenker ikke alltid til cup2000 – da finnes turneringen på navn, som i /cup2000.
-    if (!id && !ider.length && body.tournamentNavn) {
-      const funnet = await finnCup2000Id({ tournamentNavn: String(body.tournamentNavn) }).catch(() => null);
-      if (funnet) ider.push(String(funnet));
+    // Portalen lenker ikke alltid til cup2000, og ikke alltid til alle delene av en delt turnering –
+    // ta derfor også med turneringene som passer navnet.
+    if (!id && body.tournamentNavn) {
+      const funnet = await finnCup2000IderPaaNavn(body.tournamentNavn).catch(() => []);
+      for (const x of funnet) if (ider.length < 3 && !ider.includes(x)) ider.push(x);
     }
     if (!id && !ider.length) return json(body.tournamentNavn ? { klasser: [] } : { error: 'Mangler cup2000-ID' }, body.tournamentNavn ? 200 : 400);
     if (id && (!c || !e)) return json({ error: 'Mangler klasse' }, 400);
@@ -749,10 +785,14 @@ async function handleRequest(request, env) {
       const lister = await Promise.all(ider.map(x => hentCup2000Klasser(x).catch(() => [])));
       const klasser = [];
       lister.forEach((liste, i) => liste.forEach(k => klasser.push({
-        id: ider[i], c: k.c, e: k.e,
-        navn: ((k.ageGroup ? k.ageGroup + ' ' : '') + decEntCup(k.disc)).trim(),
-        hall: ider.length > 1 && lister.filter(l => l.length).length > 1 ? 'Hall ' + (i + 1) : ''
+        id: ider[i], c: k.c, e: k.e, idx: i,
+        navn: ((k.ageGroup ? k.ageGroup + ' ' : '') + decEntCup(k.disc)).trim()
       })));
+      // «Hall N» bare når samme klasse finnes i flere turneringer (delt på haller). Er turneringen
+      // delt på aldersklasser (U11/U13 for seg), er klassenavnene unike og trenger ingen merking.
+      const antall = {};
+      klasser.forEach(k => { antall[k.navn] = (antall[k.navn] || 0) + 1; });
+      klasser.forEach(k => { k.hall = antall[k.navn] > 1 ? 'Hall ' + (k.idx + 1) : ''; delete k.idx; });
       return svar({ klasser });
     }
 
@@ -839,6 +879,10 @@ async function handleRequest(request, env) {
     // den fant i klassenes cup2000-lenker hos badmintonportalen; uten dem brukes navneoppslag.
     let ider = Array.isArray(body.cup2000Ider) ? body.cup2000Ider.map(String).filter(x => /^\d+$/.test(x)) : [];
     ider = [...new Set(ider)].slice(0, 4);
+    if (body.tournamentNavn) {
+      const funnet = await finnCup2000IderPaaNavn(body.tournamentNavn).catch(() => []);
+      for (const x of funnet) if (ider.length < 4 && !ider.includes(x)) ider.push(x);
+    }
     if (!ider.length) { const id = await finnCup2000Id(body); if (id) ider = [id]; }
     if (!ider.length) return json({ kamper: [], resultater: [], kilder: [], ikkeFunnet: true });
 
