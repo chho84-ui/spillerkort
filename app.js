@@ -1316,11 +1316,14 @@ function visTurnering(t) {
         // Fallback for sammenslåtte doubles-klasser (f.eks. HD-klasse inkluderer DD/MD-spillere):
         // Arrangøren kan slå sammen HD+DD til én "Herredouble"-klasse på cup2000, mens spilleren
         // er påmeldt "Damedouble" på badmintonportalen. Da prøver vi andre doubles-varianter.
-        if (regIdx === undefined && (dc === 'HD' || dc === 'DD' || dc === 'MD')) {
-          var _dblOrder = ['HD', 'DD', 'MD'];
-          for (var _di = 0; _di < _dblOrder.length; _di++) {
-            if (_dblOrder[_di] !== dc && _dblOrder[_di] in discToRegIdx) {
-              regIdx = discToRegIdx[_dblOrder[_di]]; break;
+        // Det samme skjer med single: Vestlandsmesterskapet slo jentene i U11 inn i «Herresingle U11 A»,
+        // mens de er påmeldt Damesingle – uten dette forsvant kampene.
+        var _familie = (dc === 'HD' || dc === 'DD' || dc === 'MD') ? ['HD', 'DD', 'MD']
+          : (dc === 'HS' || dc === 'DS') ? ['HS', 'DS'] : [];
+        if (regIdx === undefined) {
+          for (var _di = 0; _di < _familie.length; _di++) {
+            if (_familie[_di] !== dc && _familie[_di] in discToRegIdx) {
+              regIdx = discToRegIdx[_familie[_di]]; break;
             }
           }
         }
@@ -2194,12 +2197,19 @@ function aapneProgram(ider, tittel, mine) {
 }
 
 // Åpne på klassen den søkte spilleren er påmeldt i (f.eks. «U15» + «Herresingle»).
+// Først samme gren og alder; ellers samme type (single/double) og alder, fordi arrangøren kan slå
+// sammen klasser (Damesingle U11 spilt i «Herresingle U11 A»).
 function programStartKlasse(klasser, mine) {
-  for (var r = 0; r < mine.length; r++) {
-    var disc = String(mine[r].disiplin || '').toLowerCase(), ag = String(mine[r].ageGroup || '').toLowerCase();
-    for (var i = 0; i < klasser.length; i++) {
-      var n = klasser[i].navn.toLowerCase();
-      if (disc && n.indexOf(disc) !== -1 && (!ag || n.indexOf(ag) !== -1)) return i;
+  function type(d) { return d.indexOf('single') !== -1 ? 'single' : (d.indexOf('double') !== -1 || d.indexOf('mix') !== -1) ? 'double' : ''; }
+  var runder = [function(n, disc) { return n.indexOf(disc) !== -1; },
+                function(n, disc) { return type(disc) && type(n) === type(disc); }];
+  for (var rn = 0; rn < runder.length; rn++) {
+    for (var r = 0; r < mine.length; r++) {
+      var disc = String(mine[r].disiplin || '').toLowerCase(), ag = String(mine[r].ageGroup || '').toLowerCase();
+      for (var i = 0; i < klasser.length; i++) {
+        var n = klasser[i].navn.toLowerCase();
+        if (disc && runder[rn](n, disc) && (!ag || n.indexOf(ag) !== -1)) return i;
+      }
     }
   }
   return 0;
