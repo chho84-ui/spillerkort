@@ -1120,6 +1120,27 @@ function sluttresultatHtml(alle) {
   return rh;
 }
 
+var GREN_NAVN = { HS: 'Herresingle', DS: 'Damesingle', HD: 'Herredouble', DD: 'Damedouble', MD: 'Mixeddouble' };
+
+function lagEkstraGren(div, t, dc, klasse) {
+  var id = 'sk-kl-' + t.tournamentId + '-x' + String(dc + klasse).replace(/\W/g, '');
+  var finnes = document.getElementById(id);
+  if (finnes) return finnes;
+  var rad = document.createElement('div');
+  rad.className = 'sk-row';
+  rad.innerHTML = '<span class="sk-bk ok">OK</span>'
+    + '<span class="sk-disc">' + esc(GREN_NAVN[dc] || dc) + (klasse ? ' <span class="sk-reg-klasse">' + esc(klasse) + '</span>' : '') + '</span>'
+    + '<span class="sk-makker">fra kampprogrammet</span>';
+  var kl = document.createElement('div');
+  kl.id = id;
+  kl.className = 'sk-kamplist';
+  // Før «Åpne i Cup2000»-knappen hvis den finnes
+  var knapp = div.querySelector(':scope > a.sk-btn');
+  div.insertBefore(rad, knapp);
+  div.insertBefore(kl, knapp);
+  return kl;
+}
+
 function visTurnering(t) {
   var res = document.getElementById('resultat');
   var sec = document.createElement('div');
@@ -1328,6 +1349,9 @@ function visTurnering(t) {
           }
         }
         var kl = (regIdx !== undefined) ? document.getElementById('sk-kl-' + t.tournamentId + '-' + regIdx) : null;
+        // Kamper uten påmelding hos portalen (lagt inn direkte i cup2000, f.eks. en double i en annen
+        // klasse) får sin egen gren i stedet for å forsvinne.
+        if (!kl && !pastKl) kl = lagEkstraGren(div, t, dc, groupKey.split('|')[1] || '');
         if (!kl && !pastKl) return;
         var entries = discGroups[groupKey];
         var kh = '';
