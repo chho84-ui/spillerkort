@@ -2221,18 +2221,22 @@ function aapneProgram(ider, tittel, mine) {
 }
 
 // Åpne på klassen den søkte spilleren er påmeldt i (f.eks. «U15» + «Herresingle»).
-// Først samme gren og alder; ellers samme type (single/double) og alder, fordi arrangøren kan slå
-// sammen klasser (Damesingle U11 spilt i «Herresingle U11 A»).
+// Rekkefølge: samme gren + hele klassen («U13 B»), samme type (single/double) + hele klassen, og så
+// det samme med bare aldersgruppen («U13»). Bare aldersgruppen ga U13 A for en spiller i U13 B.
+// Typen trengs fordi arrangøren kan slå sammen klasser (Damesingle U11 spilt i «Herresingle U11 A»).
 function programStartKlasse(klasser, mine) {
   function type(d) { return d.indexOf('single') !== -1 ? 'single' : (d.indexOf('double') !== -1 || d.indexOf('mix') !== -1) ? 'double' : ''; }
-  var runder = [function(n, disc) { return n.indexOf(disc) !== -1; },
-                function(n, disc) { return type(disc) && type(n) === type(disc); }];
+  function samme(n, disc) { return n.indexOf(disc) !== -1; }
+  function sammeType(n, disc) { return type(disc) && type(n) === type(disc); }
+  var runder = [[samme, 'klasse'], [sammeType, 'klasse'], [samme, 'ageGroup'], [sammeType, 'ageGroup']];
   for (var rn = 0; rn < runder.length; rn++) {
     for (var r = 0; r < mine.length; r++) {
-      var disc = String(mine[r].disiplin || '').toLowerCase(), ag = String(mine[r].ageGroup || '').toLowerCase();
+      var disc = String(mine[r].disiplin || '').toLowerCase();
+      var kl = String(mine[r][runder[rn][1]] || '').toLowerCase().trim();
+      if (!disc || !kl) continue;
       for (var i = 0; i < klasser.length; i++) {
         var n = klasser[i].navn.toLowerCase();
-        if (disc && runder[rn](n, disc) && (!ag || n.indexOf(ag) !== -1)) return i;
+        if (runder[rn][0](n, disc) && (' ' + n + ' ').indexOf(' ' + kl + ' ') !== -1) return i;
       }
     }
   }
