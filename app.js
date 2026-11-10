@@ -1173,7 +1173,12 @@ function visTurnering(t) {
   }
   // Med flere knapper får ikke tittel og knapper plass på én linje på mobil.
   // Da får tittelen egen linje og knappene deler raden under.
-  var knapper = liveKnappHtml + (progKnappHtml || deltKnappHtml);
+  // Ferdig turnering: lenke til hele resultatlista hos badmintonportalen i stedet for Deltakere/Program.
+  var resListeHtml = (t.isPast && klasseId)
+    ? '<a class="sk-live-btn" href="https://badmintonportalen.no/NBF/Turnering/VisResultater/#' + klasseId + ',"'
+      + ' target="_blank" rel="noopener">🏆 Resultatliste ↗</a>'
+    : '';
+  var knapper = liveKnappHtml + (resListeHtml || progKnappHtml || deltKnappHtml);
   var antKnapper = (knapper.match(/<button/g) || []).length;
   sec.innerHTML = antKnapper > 1
     ? '<div class="sk-sek-banner sk-tur-banner-full"><h3>' + tittel + '</h3><div class="sk-banner-knapper">' + knapper + '</div></div>'
@@ -1279,7 +1284,7 @@ function visTurnering(t) {
 
       // Portalen lenker ikke alltid til cup2000 (f.eks. Haugerud), men kampprogrammet ble
       // funnet via navneoppslag – da er programmet publisert, og Program erstatter Deltakere.
-      if (!sec.querySelector('.sk-prog-knapp')) leggTilProgramKnapp(sec, t);
+      if (!t.isPast && !sec.querySelector('.sk-prog-knapp')) leggTilProgramKnapp(sec, t);
       // Spillested per klasse i dag (fra live-dataene) – kjøres når kampene er tegnet, se under.
       setTimeout(function() { merkSpillested(sec, _turLive[t.tournamentId]); }, 0);
       // Siste dag eller ferdig: når badmintonportalen har publisert resultatene, vises plasseringen
