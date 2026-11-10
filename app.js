@@ -1056,7 +1056,7 @@ function hentSluttresultat(t) {
       var blokker = [];
       doc2.querySelectorAll('h2').forEach(function(h2) {
         var disc = h2.textContent.trim();
-        var blokk = { disc: disc, klasse: kl.name || '', plass: '', poeng: '', eid: '' };
+        var blokk = { disc: disc, klasse: kl.name || '', kid: String(kl.id), plass: '', poeng: '', eid: '' };
         var el2 = h2.nextElementSibling;
         while (el2 && el2.tagName !== 'TABLE' && el2.tagName !== 'H2') {
           var em = (el2.getAttribute && el2.getAttribute('onclick') || '').match(/SelectEvent\('\d+',\s*'(\d+)'\)/);
@@ -1103,6 +1103,8 @@ function hentSluttresultat(t) {
   })).then(function(alleResultater) {
     var alle = [];
     alleResultater.forEach(function(r) { if (r) r.forEach(function(b) { alle.push(b); }); });
+    // Resultatlista åpner på klassen spilleren fikk plassering i (egne klasser kommer først)
+    for (var i = 0; i < alle.length; i++) if (alle[i].plass) { _turResKlasse[t.tournamentId] = alle[i].kid; break; }
     return alle;
   });
 }
@@ -1173,10 +1175,9 @@ function visTurnering(t) {
   }
   // Med flere knapper får ikke tittel og knapper plass på én linje på mobil.
   // Da får tittelen egen linje og knappene deler raden under.
-  // Ferdig turnering: lenke til hele resultatlista hos badmintonportalen i stedet for Deltakere/Program.
-  var resListeHtml = (t.isPast && klasseId)
-    ? '<a class="sk-live-btn" href="https://badmintonportalen.no/NBF/Turnering/VisResultater/#' + klasseId + ',"'
-      + ' target="_blank" rel="noopener">🏆 Resultatliste ↗</a>'
+  // Ferdig turnering: hele resultatlista (alle klasser) i stedet for Deltakere/Program.
+  var resListeHtml = (t.isPast && alleKl.length)
+    ? ' <button class="sk-live-btn" onclick="visResultatliste(\'' + escAttrJs(t.tournamentId) + '\')">🏆 Resultatliste</button>'
     : '';
   var knapper = liveKnappHtml + (resListeHtml || progKnappHtml || deltKnappHtml);
   var antKnapper = (knapper.match(/<button/g) || []).length;
@@ -2029,6 +2030,74 @@ function visDeltakere(tournamentId) {
   aapneDeltakere(info.alle, start, 'Deltakere');
 }
 
+// Resultatliste for ferdige turneringer: samme panel og klassevelger som deltakerlista, men
+// med sluttplasseringene (SearchTournamentResults). Åpner på klassen spilleren fikk plassering i
+// (kan være en annen enn den hun meldte seg på i, f.eks. U15 X), ellers den hun var påmeldt i.
+var _turResKlasse = {};
+
+function visResultatliste(tournamentId) {
+  var info = _turKlasser[tournamentId];
+  if (!info || !info.alle.length) return;
+  var start = _turResKlasse[tournamentId] || (info.mine[0] && info.mine[0].id) || info.alle[0].id;
+  aapneDeltakere(info.alle, start, 'Resultatliste', 'res');
+}
+
+function resultatlisteApi(klasseId) {
+  var key = 'resl:' + klasseId;
+  var truffet = cacheGet(key);
+  if (truffet) return Promise.resolve(truffet);
+  return api('SearchTournamentResults', {
+    tournamentclassid: parseInt(klasseId),
+    clientselectfunction: 'SelectTournamentClass1'
+  }).then(function(res) {
+    var grener = parseResultatliste(String((res.d && res.d.Html) || ''));
+    return grener.length ? cacheSet(key, grener) : grener;
+  });
+}
+
+// <h2> per gren, så en tabell med td.rank / td.player / td.points. I double står begge
+// spillerne i samme celle; en rad uten plass er makker til paret over.
+function parseResultatliste(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var grener = [];
+  doc.querySelectorAll('h2').forEach(function(h2) {
+    var el = h2.nextElementSibling;
+    while (el && el.tagName !== 'TABLE' && el.tagName !== 'H2') el = el.nextElementSibling;
+    if (!el || el.tagName !== 'TABLE') return;
+    var rader = [];
+    el.querySelectorAll('tr').forEach(function(tr) {
+      var celle = tr.querySelector('td.player');
+      if (!celle) return;
+      var lenker = celle.querySelectorAll('a[href*="VisSpiller"]');
+      var klubbCelle = tr.querySelector('td.club');
+      var klubber = klubbCelle ? klubbCelle.innerHTML.split(/<br\s*\/?>/i).map(function(x) {
+        return x.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').trim();
+      }) : [];
+      var spillere = [];
+      for (var k = 0; k < lenker.length; k++) {
+        var idM = (lenker[k].getAttribute('href') || '').match(/VisSpiller\/#(\d+)/);
+        var etter = lenker[k].nextSibling;
+        var klubb = etter && etter.nodeType === 3 ? etter.textContent.replace(/^[,\s]+/, '').trim() : '';
+        spillere.push({ id: idM ? idM[1] : '', navn: lenker[k].textContent.replace(/\s+/g, ' ').trim(), klubb: klubb || klubber[k] || '' });
+      }
+      if (!spillere.length) {
+        var tekst = celle.textContent.replace(/\s+/g, ' ').trim();
+        if (!tekst) return;
+        spillere.push({ id: '', navn: tekst, klubb: klubber[0] || '' });
+      }
+      var plass = ((tr.querySelector('td.rank') || {}).textContent || '').trim();
+      var poeng = ((tr.querySelector('td.points') || {}).textContent || '').trim();
+      if (!plass && rader.length) {
+        rader[rader.length - 1].spillere = rader[rader.length - 1].spillere.concat(spillere);
+        return;
+      }
+      rader.push({ plass: plass, poeng: poeng, spillere: spillere });
+    });
+    if (rader.length) grener.push({ disiplin: h2.textContent.trim(), rader: rader });
+  });
+  return grener;
+}
+
 // Fra terminlista har vi bare klasse-ID-en portalen lenker til, ikke hele klasselista.
 function visDeltakereKlasse(klasseId, tittel) {
   aapneDeltakere([], klasseId, tittel || 'Deltakere');
@@ -2062,8 +2131,11 @@ function settDeltakerKlasser(klasser, valgt) {
   if (!finnes) lastDeltakere(valgt);
 }
 
-function aapneDeltakere(klasser, start, tittel) {
+var _deltModus = 'delt'; // 'delt' = påmeldte, 'res' = resultatliste
+
+function aapneDeltakere(klasser, start, tittel, modus) {
   lukkDeltakere();
+  _deltModus = modus || 'delt';
   var overlay = document.createElement('div');
   overlay.className = 'sk-gruppe-overlay';
   overlay.id = 'sk-delt-overlay';
@@ -2077,7 +2149,7 @@ function aapneDeltakere(klasser, start, tittel) {
   }
   overlay.innerHTML = '<div class="sk-gruppe-panel sk-live-panel">'
     + '<div class="sk-gruppe-hdr">'
-    + '<span class="sk-gruppe-tittel">\uD83D\uDC65 ' + esc(tittel) + '</span>'
+    + '<span class="sk-gruppe-tittel">' + (_deltModus === 'res' ? '\uD83C\uDFC6 ' : '\uD83D\uDC65 ') + esc(tittel) + '</span>'
     + '<button class="sk-gruppe-xbtn" onclick="lukkDeltakere()">\u2715</button>'
     + '</div>'
     + velger
@@ -2091,12 +2163,14 @@ function lastDeltakere(klasseId) {
   var innhold = document.getElementById('sk-delt-innhold');
   if (!innhold) return;
   innhold.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;padding:20px">Laster...</div>';
-  deltakereApi(klasseId).then(function(grener) {
+  var res = _deltModus === 'res';
+  (res ? resultatlisteApi(klasseId) : deltakereApi(klasseId)).then(function(grener) {
     var el = document.getElementById('sk-delt-innhold');
-    if (el) el.innerHTML = renderDeltakere(grener);
+    if (el) el.innerHTML = res ? renderResultatliste(grener) : renderDeltakere(grener);
   }).catch(function() {
     var el = document.getElementById('sk-delt-innhold');
-    if (el) el.innerHTML = '<div style="color:#e94560;font-size:12px;text-align:center;padding:16px">Kunne ikke hente deltakere</div>';
+    if (el) el.innerHTML = '<div style="color:#e94560;font-size:12px;text-align:center;padding:16px">Kunne ikke hente '
+      + (res ? 'resultater' : 'deltakere') + '</div>';
   });
 }
 
@@ -2129,6 +2203,32 @@ function renderDeltakere(grener) {
         + '</div>';
     }
   }
+  return html;
+}
+
+function renderResultatliste(grener) {
+  if (!grener.length) return '<div style="color:#888;font-size:12px;text-align:center;padding:16px">Resultatene er ikke publisert for denne klassen ennå</div>';
+  var html = '';
+  grener.forEach(function(g) {
+    html += '<div class="sk-live-seksjon">' + esc(g.disiplin) + '</div>';
+    g.rader.forEach(function(r) {
+      var erMeg = r.spillere.some(function(s) { return String(s.id) === String(SI) || s.navn === SN; });
+      var navnHtml = r.spillere.map(function(s) {
+        var klubb = s.klubb ? ' <span class="sk-delt-klubb">' + esc(s.klubb) + '</span>' : '';
+        var egen = String(s.id) === String(SI) || s.navn === SN;
+        if (s.id && !egen) {
+          return '<span class="sk-mot-link" onclick="visH2H(\'' + escAttrJs(s.id) + '\',\'' + escAttrJs(s.navn) + '\')">'
+            + esc(s.navn) + '</span>' + klubb;
+        }
+        return '<span class="' + (egen ? 'sk-delt-meg' : '') + '">' + esc(s.navn) + '</span>' + klubb;
+      }).join('<br>');
+      html += '<div class="sk-delt-rad' + (erMeg ? ' sk-delt-rad-meg' : '') + '">'
+        + '<span class="sk-resl-plass">' + esc(r.plass ? r.plass.replace(/\.$/, '') : '') + '</span>'
+        + '<span class="sk-delt-navn">' + navnHtml + '</span>'
+        + (r.poeng ? '<span class="sk-resl-poeng">' + esc(r.poeng) + 'p</span>' : '')
+        + '</div>';
+    });
+  });
   return html;
 }
 
