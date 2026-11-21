@@ -1307,11 +1307,18 @@ function visTurnering(t) {
         if (ta && tb) return ta - tb;
         return (a.tid || '').localeCompare(b.tid || '');
       });
-      // Finn neste kamp (første uten resultat med fremtidig tid)
+      // Finn neste kamp: første uten resultat. Kamper er ofte forsinket, så markeringen blir stående
+      // på en kamp hvis tid har passert til den får resultat. Den hoppes bare over når en senere kamp
+      // allerede har resultat, eller når den skulle startet for over 3 timer siden (W.O., manglende data).
       var nowT = new Date();
+      var grenseT = new Date(nowT.getTime() - 3 * 3600 * 1000);
+      var sisteMedRes = -1;
+      for (var si = 0; si < kamper.length; si++) if (kamper[si].res) sisteMedRes = si;
       var nextKampIdx = -1;
-      for (var ni = 0; ni < kamper.length; ni++) {
-        if (!kamper[ni].res) { var ntd = parseTid(kamper[ni].tid); if (ntd && ntd > nowT) { nextKampIdx = ni; break; } }
+      for (var ni = sisteMedRes + 1; ni < kamper.length; ni++) {
+        if (kamper[ni].res) continue;
+        var ntd = parseTid(kamper[ni].tid);
+        if (ntd && ntd > grenseT) { nextKampIdx = ni; break; }
       }
 
       // Bygg disc+ageGroup→regIdx-kart (skiller f.eks. U13 MD fra U15 MD)
